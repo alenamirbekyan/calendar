@@ -217,7 +217,6 @@ body {
   font: inherit;
   color: inherit;
   cursor: pointer;
-  perspective: 700px;
   animation: apparition 0.6s both;
   animation-delay: var(--delai, 0s);
 }
@@ -256,12 +255,17 @@ body {
   color: var(--or);
 }
 
+/* La perspective est proportionnelle à la taille de la case (cqmax = 1 % de son plus grand côté).
+   Avec une valeur fixe en pixels, les grandes portes grossissaient énormément en s'ouvrant
+   et recouvraient les cases voisines. */
 .case-porte {
   position: absolute;
   inset: 0;
   transform-origin: left center;
   transform-style: preserve-3d;
-  transition: transform 0.95s cubic-bezier(0.25, 1.35, 0.45, 1);
+  --perspective-porte: 800cqmax;
+  transform: perspective(var(--perspective-porte)) rotateY(0deg) scale(1);
+  transition: transform 0.95s cubic-bezier(0.25, 1.2, 0.45, 1);
 }
 
 .case-face,
@@ -375,13 +379,14 @@ body {
 .case--kraft { --fond: var(--kraft); --chiffre: #3b2416; }
 .case--minuit { --fond: var(--minuit); --chiffre: var(--or); }
 
-/* Case ouverte : la porte reste entrebâillée */
+/* Case ouverte : la porte reste entrebâillée.
+   Sous 90°, elle ne bascule pas par-dessus la case de gauche. */
 .case.est-ouverte {
   z-index: 2;
 }
 
 .case.est-ouverte .case-porte {
-  transform: rotateY(-112deg);
+  transform: perspective(var(--perspective-porte)) rotateY(-72deg) scale(0.9);
 }
 
 /* Case du jour : halo doré qui respire */
@@ -425,13 +430,16 @@ body {
   inset: 0;
   background: linear-gradient(110deg, transparent 35%, rgba(255, 255, 255, 0.28) 50%, transparent 65%);
   background-size: 250% 100%;
-  animation: reflet 4.5s ease-in-out infinite;
+  /* Sans no-repeat, le dégradé se répète en mosaïque : une copie du reflet restait
+     immobile au milieu de la porte en fin de passage, puis sautait au redémarrage de la boucle. */
+  background-repeat: no-repeat;
+  animation: reflet 2.8s ease-in-out infinite;
   animation-delay: var(--delai, 0s);
 }
 
 @keyframes reflet {
   0% { background-position: 120% 0; }
-  40%, 100% { background-position: -120% 0; }
+  64%, 100% { background-position: -120% 0; }
 }
 
 /* Case verrouillée : elle refuse en se tortillant */
@@ -440,10 +448,10 @@ body {
 }
 
 @keyframes gigote {
-  20% { transform: rotateY(-8deg); }
-  40% { transform: rotateY(3deg); }
-  60% { transform: rotateY(-5deg); }
-  80% { transform: rotateY(1deg); }
+  20% { transform: perspective(var(--perspective-porte)) rotateY(-8deg) scale(1); }
+  40% { transform: perspective(var(--perspective-porte)) rotateY(3deg) scale(1); }
+  60% { transform: perspective(var(--perspective-porte)) rotateY(-5deg) scale(1); }
+  80% { transform: perspective(var(--perspective-porte)) rotateY(1deg) scale(1); }
 }
 
 /* ---------- Carte qui révèle le contenu ---------- */
