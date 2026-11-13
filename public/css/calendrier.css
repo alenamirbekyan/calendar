@@ -153,6 +153,18 @@ body {
   display: none;
 }
 
+.progression {
+  margin: 10px 0 0;
+  font-family: 'Caveat', cursive;
+  font-size: 1.25rem;
+  color: var(--creme);
+  opacity: 0.85;
+}
+
+.progression:empty {
+  display: none;
+}
+
 /* ---------- Plateau et grille des cases ---------- */
 
 .plateau {

@@ -1,3 +1,4 @@
+const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const express = require('express');
@@ -16,6 +17,7 @@ const comptes = require('./src/comptes');
 const stockage = require('./src/stockage');
 const dates = require('./src/dates');
 const images = require('./src/images');
+const limiteConnexion = require('./src/limiteConnexion');
 const { verifierMotDePasse, hacherMotDePasse } = require('./src/motsDePasse');
 const PGStore = require('connect-pg-simple')(session);
 
@@ -28,8 +30,15 @@ if (!secretDeSession) {
   console.warn('SESSION_SECRET absent : secret temporaire généré (les sessions sautent au redémarrage).');
 }
 
+// À activer quand le site est servi en HTTPS derrière un proxy ou un tunnel :
+// le cookie de session n'est alors envoyé qu'en HTTPS.
+const derriereProxyHttps = process.env.TRUST_PROXY === '1';
+
 const app = express();
 app.disable('x-powered-by');
+if (derriereProxyHttps) {
+  app.set('trust proxy', 1);
+}
 app.use(express.json());
 
 // Les adresses contiennent des jetons secrets : on ne les transmet à aucun autre site
@@ -47,7 +56,7 @@ app.use(
     secret: secretDeSession,
     resave: false,
     saveUninitialized: false,
-    cookie: { httpOnly: true, sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 },
+    cookie: { httpOnly: true, sameSite: 'lax', secure: derriereProxyHttps, maxAge: 7 * 24 * 60 * 60 * 1000 },
   })
 );
 
@@ -57,15 +66,20 @@ app.use(express.static(DOSSIER_PUBLIC));
 // Les noms de fichiers sont des UUID : impossible de deviner l'image d'une case encore fermée.
 app.use('/uploads', express.static(images.DOSSIER_IMAGES, { maxAge: '7d' }));
 
+// La page du calendrier contient {{ORIGINE}} : les messageries exigent une adresse
+// complète (https://site/...) pour l'image d'aperçu du lien.
+const MODELE_PAGE_CALENDRIER = fs.readFileSync(path.join(DOSSIER_PUBLIC, 'calendrier.html'), 'utf8');
+
+function envoyerPageCalendrier(req, res) {
+  const origine = `${req.protocol}://${req.get('host')}`;
+  res.type('html').send(MODELE_PAGE_CALENDRIER.replaceAll('{{ORIGINE}}', origine));
+}
+
 // Page d'un destinataire : le jeton de l'URL est la seule clé d'entrée
-app.get('/c/:jeton', (req, res) => {
-  res.sendFile(path.join(DOSSIER_PUBLIC, 'calendrier.html'));
-});
+app.get('/c/:jeton', envoyerPageCalendrier);
 
 // Aperçu admin : même page, les données ne sont servies qu'au propriétaire connecté
-app.get('/apercu/:id', (req, res) => {
-  res.sendFile(path.join(DOSSIER_PUBLIC, 'calendrier.html'));
-});
+app.get('/apercu/:id', envoyerPageCalendrier);
 
 // ---------- Données d'un calendrier pour la page publique ----------
 
@@ -153,15 +167,27 @@ app.post('/admin/api/connexion', async (req, res) => {
   const identifiant = String(corps.identifiant || '').trim().toLowerCase();
   const motDePasse = String(corps.motDePasse || '');
 
+  // Un identifiant mal formé ne peut pas exister : inutile de le suivre
+  if (!FORMAT_IDENTIFIANT.test(identifiant)) {
+    await attendre(800);
+    return res.status(401).json({ erreur: 'Identifiant ou mot de passe incorrect' });
+  }
+  const minutesRestantes = limiteConnexion.minutesDeBlocageRestantes(identifiant);
+  if (minutesRestantes > 0) {
+    return res.status(429).json({ erreur: `Trop d'essais. Réessayez dans ${minutesRestantes} min.` });
+  }
+
   const admin = await comptes.trouverAdminParIdentifiant(identifiant);
   const empreinte = admin ? admin.empreinteMotDePasse : await empreinteLeurre;
   const motDePasseCorrect = await verifierMotDePasse(motDePasse, empreinte);
 
   if (!admin || !motDePasseCorrect) {
+    limiteConnexion.noterEchec(identifiant);
     // Petit délai pour décourager les essais en rafale
     await attendre(800);
     return res.status(401).json({ erreur: 'Identifiant ou mot de passe incorrect' });
   }
+  limiteConnexion.noterReussite(identifiant);
 
   req.session.regenerate((erreur) => {
     if (erreur) {

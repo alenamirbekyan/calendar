@@ -14,6 +14,7 @@
     titre: document.getElementById('titre'),
     message: document.getElementById('message'),
     statut: document.getElementById('statut'),
+    progression: document.getElementById('progression'),
     plateau: document.getElementById('plateau'),
     introuvable: document.getElementById('introuvable'),
     carte: document.getElementById('carte'),
@@ -130,6 +131,19 @@
       statut = 'Joyeux Noël ! Toutes les cases sont ouvertes.';
     }
     elements.statut.textContent = statut;
+    afficherProgression();
+  }
+
+  // « 5 cases ouvertes sur 24 », sous le statut
+  function afficherProgression() {
+    const nombre = casesOuvertes.size;
+    if (toutEstOuvertPourEssai() || nombre === 0) {
+      elements.progression.textContent = '';
+      return;
+    }
+    const total = calendrier.jours.length;
+    elements.progression.textContent =
+      nombre === 1 ? `1 case ouverte sur ${total}` : `${nombre} cases ouvertes sur ${total}`;
   }
 
   function construireCase(jour, position, hasard, couleurPrecedente) {
@@ -213,7 +227,13 @@
 
   function surClicCase(bouton, jour) {
     if (!jour.ouvrable) {
-      refuserOuverture(bouton, jour.numero);
+      // Seule la prochaine case peut s'être débloquée depuis le chargement de la page
+      // (minuit est passé) : pour elle, on pose la question au serveur.
+      if (typeDePage === 'c' && jour.numero === numeroDeLaProchaineCaseFermee()) {
+        demanderOuvertureAuServeur(bouton, jour.numero);
+      } else {
+        refuserOuverture(bouton, jour.numero);
+      }
       return;
     }
     if (bouton.classList.contains('est-ouverte')) {
@@ -224,8 +244,40 @@
     bouton.classList.add('est-ouverte');
     casesOuvertes.add(jour.numero);
     memoriserOuverture(jour.numero);
+    afficherProgression();
     lancerEtincelles(bouton);
     setTimeout(() => afficherCarte(jour), mouvementReduit ? 150 : 700);
+  }
+
+  function numeroDeLaProchaineCaseFermee() {
+    const numerosFermes = calendrier.jours.filter((jour) => !jour.ouvrable).map((jour) => jour.numero);
+    return Math.min(...numerosFermes);
+  }
+
+  // Le serveur décide avec sa propre date. S'il accepte, on recharge le calendrier
+  // (statut, case du jour, contenu) puis on ouvre la porte.
+  let demandeEnCours = false;
+
+  async function demanderOuvertureAuServeur(bouton, numero) {
+    if (demandeEnCours) {
+      return;
+    }
+    demandeEnCours = true;
+    try {
+      const reponse = await fetch(`/api/c/${identifiantDansLUrl}/ouvertures/${numero}`, { method: 'POST' });
+      const rechargementReussi = reponse.ok && (await chargerCalendrier(numero));
+      if (!rechargementReussi) {
+        refuserOuverture(bouton, numero);
+        return;
+      }
+      const nouveauBouton = elements.plateau.querySelector(`.case[data-numero="${numero}"]`);
+      const nouveauJour = calendrier.jours.find((jour) => jour.numero === numero);
+      surClicCase(nouveauBouton, nouveauJour);
+    } catch {
+      refuserOuverture(bouton, numero);
+    } finally {
+      demandeEnCours = false;
+    }
   }
 
   function refuserOuverture(bouton, numero) {
@@ -435,6 +487,24 @@
     requestAnimationFrame(animer);
   }
 
+  // ---------- Chargement des données ----------
+
+  // numeroALaisserFerme : case qu'on s'apprête à ouvrir, pour garder l'animation de la porte
+  async function chargerCalendrier(numeroALaisserFerme) {
+    const reponse = await fetch(adresseApi);
+    if (!reponse.ok) {
+      return false;
+    }
+    calendrier = await reponse.json();
+    casesOuvertes = lireCasesOuvertes();
+    if (numeroALaisserFerme !== null) {
+      casesOuvertes.delete(numeroALaisserFerme);
+    }
+    afficherEntete();
+    construireGrille();
+    return true;
+  }
+
   // ---------- Démarrage ----------
 
   async function demarrer() {
@@ -449,17 +519,12 @@
       lancerNeige();
     }
 
-    const reponse = await fetch(adresseApi);
-    if (!reponse.ok) {
+    const charge = await chargerCalendrier(null);
+    if (!charge) {
       elements.titre.textContent = 'Oh oh oh...';
       elements.introuvable.hidden = false;
       return;
     }
-
-    calendrier = await reponse.json();
-    casesOuvertes = lireCasesOuvertes();
-    afficherEntete();
-    construireGrille();
     setTimeout(faireDefilerVersLaCaseDuJour, 900);
   }
 

@@ -386,12 +386,8 @@
       const boutonCopier = creerBouton('Copier', 'bouton');
       boutonCopier.addEventListener('click', () => copier(adresseDuLien(lien.jeton)));
 
-      const lienOuvrir = document.createElement('a');
-      lienOuvrir.className = 'bouton';
-      lienOuvrir.href = adresseDuLien(lien.jeton);
-      lienOuvrir.target = '_blank';
-      lienOuvrir.rel = 'noopener noreferrer';
-      lienOuvrir.textContent = 'Ouvrir';
+      // Pas de bouton « Ouvrir » : visiter le lien d'un destinataire fausserait son suivi
+      // (dernière visite, cases ouvertes). Pour vérifier le rendu, il y a « Aperçu complet ».
 
       const boutonSupprimer = creerBouton('', 'bouton bouton--danger');
       boutonADoubleConfirmation(boutonSupprimer, 'Supprimer', async () => {
@@ -401,7 +397,7 @@
         notifier('Lien désactivé');
       });
 
-      actions.append(boutonCopier, lienOuvrir, boutonSupprimer);
+      actions.append(boutonCopier, boutonSupprimer);
       element.append(nom, adresse, visite, actions);
       liste.appendChild(element);
     }

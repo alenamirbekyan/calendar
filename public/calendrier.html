@@ -7,6 +7,14 @@
   <meta name="robots" content="noindex">
   <meta name="referrer" content="no-referrer">
   <title>Calendrier de l'Avent</title>
+  <!-- Aperçu du lien dans les messageries. {{ORIGINE}} est remplacé par le serveur. -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Un calendrier de l'Avent rien que pour vous">
+  <meta property="og:description" content="24 cases, une surprise par jour jusqu'à Noël.">
+  <meta property="og:image" content="{{ORIGINE}}/img/partage.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&display=swap" rel="stylesheet">
@@ -22,6 +30,7 @@
       <h1 id="titre" class="titre">&nbsp;</h1>
       <p id="message" class="message"></p>
       <p id="statut" class="statut"></p>
+      <p id="progression" class="progression"></p>
     </header>
 
     <section id="plateau" class="plateau" aria-label="Les 24 cases du calendrier"></section>
