@@ -1,0 +1,19 @@
+{
+  "name": "calendrier-de-l-avent",
+  "version": "1.0.0",
+  "description": "Calendriers de l'Avent personnalisés, avec backoffice",
+  "main": "server.js",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=20.12"
+  },
+  "dependencies": {
+    "express": "^5.3.0",
+    "express-session": "^1.19.0",
+    "multer": "^2.5.0"
+  }
+}

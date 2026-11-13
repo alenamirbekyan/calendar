@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#173d33">
+  <meta name="robots" content="noindex">
+  <title>Atelier des lutins</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@700&family=Fraunces:opsz,wght@9..144,400..700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/admin/admin.css">
+</head>
+<body>
+  <header class="barre">
+    <a href="#/" class="barre-logo">Atelier des lutins</a>
+    <button type="button" id="bouton-deconnexion" class="lien-discret" hidden>Se déconnecter</button>
+  </header>
+
+  <main class="contenu">
+    <!-- Connexion -->
+    <section id="vue-connexion" class="vue vue-connexion" hidden>
+      <form id="formulaire-connexion" class="carton">
+        <h1>Entrée de l'atelier</h1>
+        <label class="champ">
+          <span>Mot de passe</span>
+          <input type="password" name="motDePasse" autocomplete="current-password" required>
+        </label>
+        <p class="erreur" data-erreur></p>
+        <button type="submit" class="bouton bouton--principal">Entrer</button>
+      </form>
+    </section>
+
+    <!-- Liste des calendriers -->
+    <section id="vue-liste" class="vue" hidden>
+      <div class="entete-vue">
+        <h1>Mes calendriers</h1>
+        <button type="button" id="bouton-nouveau" class="bouton bouton--principal">Nouveau calendrier</button>
+      </div>
+      <p id="liste-vide" class="vide" hidden>Aucun calendrier pour l'instant. Créez le premier !</p>
+      <ul id="liste-calendriers" class="liste-calendriers"></ul>
+    </section>
+
+    <!-- Édition d'un calendrier -->
+    <section id="vue-edition" class="vue" hidden>
+      <a href="#/" class="retour">&larr; Tous les calendriers</a>
+      <div class="entete-vue">
+        <h1 id="edition-titre"></h1>
+        <div class="actions-lien">
+          <a id="lien-voir" class="bouton" target="_blank" rel="noopener">Voir</a>
+          <a id="lien-apercu" class="bouton" target="_blank" rel="noopener">Aperçu complet</a>
+          <button type="button" id="bouton-copier" class="bouton">Copier le lien</button>
+        </div>
+      </div>
+
+      <div class="edition-colonnes">
+        <form id="formulaire-reglages" class="carton reglages">
+          <h2>Réglages</h2>
+          <div data-champs-calendrier></div>
+          <p class="erreur" data-erreur></p>
+          <button type="submit" class="bouton bouton--principal">Enregistrer</button>
+
+          <div class="zone-danger">
+            <button type="button" id="bouton-supprimer" class="bouton bouton--danger">Supprimer ce calendrier</button>
+          </div>
+        </form>
+
+        <div class="carton">
+          <h2>Les 24 cases</h2>
+          <p class="aide">Touchez une case pour y mettre un texte, une image, ou les deux.</p>
+          <ol id="grille-jours" class="grille-jours"></ol>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modèle des champs communs à la création et à l'édition -->
+  <template id="modele-champs-calendrier">
+    <label class="champ">
+      <span>Titre</span>
+      <input type="text" name="titre" maxlength="80" placeholder="Pour Léa" required>
+    </label>
+    <label class="champ">
+      <span>Adresse du calendrier</span>
+      <span class="champ-prefixe">
+        <span data-prefixe-adresse></span>
+        <input type="text" name="slug" maxlength="60" pattern="[a-z0-9]+(-[a-z0-9]+)*" required autocapitalize="off" autocorrect="off" spellcheck="false">
+      </span>
+      <small>Minuscules, chiffres et tirets. Gardez une petite partie aléatoire pour qu'elle reste secrète.</small>
+    </label>
+    <label class="champ">
+      <span>Année</span>
+      <input type="number" name="annee" min="2000" max="2100" required inputmode="numeric">
+    </label>
+    <label class="champ">
+      <span>Message d'accueil <em>(facultatif)</em></span>
+      <textarea name="message" rows="3" maxlength="500" placeholder="Un petit mot affiché sous le titre"></textarea>
+    </label>
+    <label class="coche">
+      <input type="checkbox" name="modeTest">
+      <span>
+        <strong>Test date</strong>
+        <small>Ignore les dates : toutes les cases s'ouvrent, pour tout le monde. À décocher avant de partager le lien.</small>
+      </span>
+    </label>
+  </template>
+
+  <!-- Création -->
+  <dialog id="dialogue-creation" class="dialogue">
+    <form id="formulaire-creation" class="dialogue-contenu">
+      <h2>Nouveau calendrier</h2>
+      <div data-champs-calendrier></div>
+      <p class="erreur" data-erreur></p>
+      <div class="dialogue-actions">
+        <button type="button" class="bouton" data-fermer>Annuler</button>
+        <button type="submit" class="bouton bouton--principal">Créer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Édition d'une case -->
+  <dialog id="dialogue-jour" class="dialogue">
+    <form id="formulaire-jour" class="dialogue-contenu">
+      <h2 id="jour-titre"></h2>
+      <label class="champ">
+        <span>Texte</span>
+        <textarea name="texte" rows="6" maxlength="2000" placeholder="Un mot doux, une énigme, un bon pour un chocolat chaud..."></textarea>
+      </label>
+      <div class="champ">
+        <span>Image</span>
+        <div id="jour-apercu" class="jour-apercu">
+          <img id="jour-apercu-image" alt="" hidden>
+          <p id="jour-apercu-vide">Pas d'image</p>
+        </div>
+        <div class="jour-boutons-image">
+          <label class="bouton">
+            Choisir une image
+            <input type="file" id="jour-fichier" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
+          </label>
+          <button type="button" id="jour-retirer-image" class="bouton">Retirer l'image</button>
+        </div>
+      </div>
+      <p class="erreur" data-erreur></p>
+      <div class="dialogue-actions">
+        <button type="button" class="bouton" data-fermer>Annuler</button>
+        <button type="submit" class="bouton bouton--principal">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="notification" class="notification" role="status" aria-live="polite"></div>
+
+  <script src="/admin/admin.js"></script>
+</body>
+</html>

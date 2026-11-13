@@ -1,0 +1,676 @@
+/* ==========================================================
+   Calendrier de l'Avent : page publique (pensée mobile d'abord)
+   ========================================================== */
+
+:root {
+  --nuit: #0c2024;
+  --nuit-claire: #163a40;
+  --sapin-fonce: #133229;
+  --sapin: #245a43;
+  --canneberge: #a3292b;
+  --creme: #f4ead6;
+  --papier: #f7efdf;
+  --kraft: #c79a5e;
+  --minuit: #23365a;
+  --or: #e2bd6b;
+  --encre: #2d211a;
+
+  --espace: 8px;
+  --rayon: 6px;
+
+  /* Grain de papier, réutilisé sur les portes et la carte */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  font-family: 'Fraunces', Georgia, serif;
+  color: var(--creme);
+  background-color: var(--nuit);
+  background-image:
+    radial-gradient(circle at 85% 4%, rgba(255, 236, 190, 0.16) 0, rgba(255, 236, 190, 0) 22%),
+    radial-gradient(ellipse at 50% 100%, var(--nuit-claire) 0, var(--nuit) 70%);
+  background-attachment: fixed;
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ---------- Neige et guirlande ---------- */
+
+.neige {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.guirlande {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 70px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.guirlande svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.ampoule {
+  animation: scintille 2.8s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes scintille {
+  0%, 100% { opacity: 1; }
+  45% { opacity: 0.35; }
+  55% { opacity: 0.4; }
+}
+
+/* ---------- En-tête ---------- */
+
+.page {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 64px 14px 24px;
+}
+
+.entete {
+  text-align: center;
+  margin-bottom: 22px;
+}
+
+.surtitre {
+  margin: 0;
+  font-family: 'Caveat', cursive;
+  font-weight: 700;
+  font-size: 1.55rem;
+  color: var(--or);
+  transform: rotate(-2deg);
+}
+
+.titre {
+  margin: 0 0 6px;
+  font-weight: 600;
+  font-size: clamp(2.1rem, 9vw, 3.4rem);
+  font-variation-settings: 'opsz' 144;
+  line-height: 1.02;
+  letter-spacing: -0.01em;
+  color: var(--creme);
+  text-wrap: balance;
+}
+
+.message {
+  max-width: 34ch;
+  margin: 10px auto 0;
+  font-style: italic;
+  font-weight: 300;
+  font-size: 1.05rem;
+  line-height: 1.45;
+  color: rgba(244, 234, 214, 0.82);
+  white-space: pre-line;
+}
+
+.message:empty {
+  display: none;
+}
+
+.statut {
+  display: inline-block;
+  margin: 16px 0 0;
+  padding: 6px 14px;
+  border: 1px dashed rgba(226, 189, 107, 0.6);
+  border-radius: 999px;
+  font-size: 0.92rem;
+  color: var(--or);
+}
+
+.statut:empty {
+  display: none;
+}
+
+/* ---------- Plateau et grille des cases ---------- */
+
+.plateau {
+  position: relative;
+  container-type: inline-size;
+  padding: 12px;
+  border-radius: 12px;
+  background-color: var(--sapin-fonce);
+  background-image:
+    var(--grain),
+    radial-gradient(rgba(226, 189, 107, 0.16) 1px, transparent 1.4px);
+  background-size: 160px 160px, 18px 18px;
+  background-blend-mode: soft-light, normal;
+  box-shadow:
+    0 0 0 1px rgba(226, 189, 107, 0.35) inset,
+    0 0 0 5px var(--sapin-fonce) inset,
+    0 0 0 6px rgba(226, 189, 107, 0.25) inset,
+    0 24px 50px rgba(0, 0, 0, 0.45);
+}
+
+.plateau:empty {
+  display: none;
+}
+
+.grille {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: calc((100cqi - 2 * var(--espace)) / 3);
+  grid-auto-flow: dense;
+  gap: var(--espace);
+}
+
+@media (min-width: 640px) {
+  .page {
+    padding-top: 80px;
+  }
+
+  .plateau {
+    padding: 18px;
+  }
+
+  .grille {
+    --espace: 12px;
+    grid-template-columns: repeat(4, 1fr);
+    grid-auto-rows: calc((100cqi - 3 * var(--espace)) / 4);
+  }
+}
+
+.case--grande { grid-column: span 2; grid-row: span 2; }
+.case--haute { grid-row: span 2; }
+.case--large { grid-column: span 2; }
+
+/* ---------- Une case : un creux + une porte qui pivote ---------- */
+
+.case {
+  position: relative;
+  container-type: size;
+  padding: 0;
+  border: 0;
+  border-radius: var(--rayon);
+  background: #08140f;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  perspective: 700px;
+  animation: apparition 0.6s both;
+  animation-delay: var(--delai, 0s);
+}
+
+@keyframes apparition {
+  from { opacity: 0; transform: translateY(10px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+
+.case:focus-visible {
+  outline: 2px solid var(--or);
+  outline-offset: 3px;
+}
+
+.case-creux {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: var(--rayon);
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at 50% 40%, #1d3b30, #08140f 75%);
+  box-shadow: inset 0 6px 14px rgba(0, 0, 0, 0.75);
+}
+
+.case-creux img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(1.05);
+}
+
+.case-creux svg {
+  width: 38cqmin;
+  height: 38cqmin;
+  color: var(--or);
+}
+
+.case-porte {
+  position: absolute;
+  inset: 0;
+  transform-origin: left center;
+  transform-style: preserve-3d;
+  transition: transform 0.95s cubic-bezier(0.25, 1.35, 0.45, 1);
+}
+
+.case-face,
+.case-dos {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--rayon);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+.case-face {
+  overflow: hidden;
+  background-color: var(--fond);
+  background-image: var(--grain);
+  background-size: 160px 160px;
+  background-blend-mode: soft-light;
+  color: var(--chiffre);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.25), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+/* Ligne prédécoupée, comme sur un vrai calendrier en carton */
+.case-face::before {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border: 1.5px dashed currentColor;
+  border-radius: 3px;
+  opacity: 0.32;
+}
+
+.case-dos {
+  transform: rotateY(180deg);
+  background: #d7c3a0;
+  background-image: var(--grain);
+  background-size: 160px 160px;
+  background-blend-mode: multiply;
+  box-shadow: inset -6px 0 10px rgba(0, 0, 0, 0.18);
+}
+
+.case-motif {
+  position: absolute;
+  width: 26cqmin;
+  height: 26cqmin;
+  right: 10cqmin;
+  bottom: 10cqmin;
+  opacity: 0.38;
+}
+
+/* Sur les grandes portes, le motif peut prendre plus de place */
+.case--grande .case-motif {
+  width: 22cqmin;
+  height: 22cqmin;
+}
+
+.case-numero {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 46cqmin;
+  font-variation-settings: 'opsz' 144;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+/* Quatre manières d'écrire le chiffre, pour un côté fait main */
+.case--style-1 .case-numero {
+  font-style: italic;
+  font-weight: 400;
+  place-items: start;
+  padding: 12cqmin 0 0 14cqmin;
+  font-size: 42cqmin;
+}
+
+.case--style-2 .case-numero {
+  font-family: 'Caveat', cursive;
+  font-weight: 700;
+  font-size: 50cqmin;
+  letter-spacing: 0;
+  place-items: start;
+  padding: 8cqmin 0 0 15cqmin;
+}
+
+.case--style-3 .case-numero {
+  place-items: start end;
+  padding: 11cqmin 11cqmin 0 0;
+}
+
+.case--style-3 .case-numero span {
+  display: grid;
+  place-items: center;
+  width: 44cqmin;
+  height: 44cqmin;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  font-size: 22cqmin;
+  font-weight: 600;
+}
+
+.case--style-3 .case-motif {
+  right: auto;
+  left: 10cqmin;
+}
+
+/* Couleurs des portes */
+.case--canneberge { --fond: var(--canneberge); --chiffre: #f6e4c6; }
+.case--sapin { --fond: var(--sapin); --chiffre: var(--or); }
+.case--creme { --fond: var(--creme); --chiffre: var(--canneberge); }
+.case--kraft { --fond: var(--kraft); --chiffre: #3b2416; }
+.case--minuit { --fond: var(--minuit); --chiffre: var(--or); }
+
+/* Case ouverte : la porte reste entrebâillée */
+.case.est-ouverte {
+  z-index: 2;
+}
+
+.case.est-ouverte .case-porte {
+  transform: rotateY(-112deg);
+}
+
+/* Case du jour : halo doré qui respire */
+.case.est-du-jour:not(.est-ouverte) .case-face {
+  box-shadow:
+    0 0 0 2px var(--or),
+    0 0 18px 4px rgba(226, 189, 107, 0.55);
+  animation: respire 2.4s ease-in-out infinite;
+}
+
+@keyframes respire {
+  50% { box-shadow: 0 0 0 2px var(--or), 0 0 28px 8px rgba(226, 189, 107, 0.75); }
+}
+
+.case-etiquette {
+  position: absolute;
+  left: 50%;
+  bottom: -2px;
+  z-index: 3;
+  transform: translate(-50%, 50%) rotate(-3deg);
+  padding: 1px 9px 2px;
+  border-radius: 3px;
+  background: var(--or);
+  color: var(--encre);
+  font-family: 'Caveat', cursive;
+  font-weight: 700;
+  font-size: 1.05rem;
+  white-space: nowrap;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.case.est-ouverte .case-etiquette {
+  display: none;
+}
+
+/* Case déjà ouvrable mais pas encore ouverte : un petit éclat discret */
+.case.est-ouvrable:not(.est-ouverte):not(.est-du-jour) .case-face::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 35%, rgba(255, 255, 255, 0.28) 50%, transparent 65%);
+  background-size: 250% 100%;
+  animation: reflet 4.5s ease-in-out infinite;
+  animation-delay: var(--delai, 0s);
+}
+
+@keyframes reflet {
+  0% { background-position: 120% 0; }
+  40%, 100% { background-position: -120% 0; }
+}
+
+/* Case verrouillée : elle refuse en se tortillant */
+.case.gigote .case-porte {
+  animation: gigote 0.5s ease;
+}
+
+@keyframes gigote {
+  20% { transform: rotateY(-8deg); }
+  40% { transform: rotateY(3deg); }
+  60% { transform: rotateY(-5deg); }
+  80% { transform: rotateY(1deg); }
+}
+
+/* ---------- Carte qui révèle le contenu ---------- */
+
+.carte {
+  width: 100%;
+  max-width: 480px;
+  max-height: 100dvh;
+  margin: auto auto 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--encre);
+  overflow: visible;
+}
+
+.carte::backdrop {
+  background: rgba(4, 14, 16, 0.72);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+
+.carte[open] .carte-papier {
+  animation: monte 0.5s cubic-bezier(0.2, 1.2, 0.4, 1);
+}
+
+@keyframes monte {
+  from { transform: translateY(70px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+.carte-papier {
+  position: relative;
+  max-height: 90dvh;
+  overflow-y: auto;
+  padding: 26px 22px calc(30px + env(safe-area-inset-bottom));
+  border-radius: 20px 20px 0 0;
+  background-color: var(--papier);
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.4);
+  text-align: center;
+  outline: none;
+}
+
+/* Grain de papier très léger, posé par-dessus sans gêner les clics */
+.carte-papier::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-image: var(--grain);
+  background-size: 160px 160px;
+  mix-blend-mode: multiply;
+  opacity: 0.16;
+  pointer-events: none;
+}
+
+@media (min-width: 640px) {
+  .carte {
+    margin: auto;
+  }
+
+  .carte-papier {
+    border-radius: 14px;
+    padding-bottom: 30px;
+    transform: rotate(-0.6deg);
+  }
+}
+
+.carte-fermer {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(45, 33, 26, 0.07);
+  color: var(--encre);
+  cursor: pointer;
+}
+
+.carte-date {
+  margin: 0 0 16px;
+  font-family: 'Caveat', cursive;
+  font-weight: 700;
+  font-size: 2.3rem;
+  line-height: 1;
+  color: var(--canneberge);
+}
+
+.carte-figure {
+  position: relative;
+  margin: 22px auto 22px;
+  padding: 10px 10px 32px;
+  width: fit-content;
+  max-width: 100%;
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(45, 33, 26, 0.25), 0 1px 3px rgba(45, 33, 26, 0.2);
+  transform: rotate(-1.6deg);
+}
+
+.carte-figure img {
+  display: block;
+  max-width: 100%;
+  max-height: 55dvh;
+  object-fit: contain;
+}
+
+.carte-scotch {
+  position: absolute;
+  top: -13px;
+  left: 50%;
+  width: 96px;
+  height: 26px;
+  transform: translateX(-50%) rotate(-5deg);
+  background: rgba(233, 213, 160, 0.78);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.carte-texte {
+  margin: 0 auto;
+  max-width: 36ch;
+  font-size: 1.1rem;
+  line-height: 1.55;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.carte-texte.est-vide {
+  font-family: 'Caveat', cursive;
+  font-size: 1.5rem;
+  color: #6b5446;
+}
+
+.carte-signature {
+  display: block;
+  width: 34px;
+  height: 34px;
+  margin: 20px auto 0;
+  color: var(--canneberge);
+  opacity: 0.85;
+}
+
+/* ---------- Bulle de message ---------- */
+
+.bulle {
+  position: fixed;
+  left: 50%;
+  bottom: calc(22px + env(safe-area-inset-bottom));
+  z-index: 10;
+  max-width: calc(100% - 32px);
+  padding: 8px 18px 10px;
+  border-radius: 12px;
+  background: var(--papier);
+  color: var(--canneberge);
+  font-family: 'Caveat', cursive;
+  font-weight: 700;
+  font-size: 1.45rem;
+  line-height: 1.1;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  transform: translate(-50%, 140%);
+  opacity: 0;
+  transition: transform 0.35s cubic-bezier(0.2, 1.3, 0.4, 1), opacity 0.25s;
+  pointer-events: none;
+}
+
+.bulle.est-visible {
+  transform: translate(-50%, 0) rotate(-1deg);
+  opacity: 1;
+}
+
+/* ---------- Étincelles à l'ouverture ---------- */
+
+.etincelle {
+  position: fixed;
+  z-index: 5;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  color: var(--or);
+  animation: etincelle 0.9s ease-out forwards;
+}
+
+@keyframes etincelle {
+  from { transform: translate(0, 0) scale(0.4) rotate(0); opacity: 1; }
+  to { transform: translate(var(--dx), var(--dy)) scale(1) rotate(160deg); opacity: 0; }
+}
+
+/* ---------- Pied de page enneigé ---------- */
+
+.pied {
+  position: relative;
+  z-index: 0;
+  margin-top: -10px;
+  line-height: 0;
+}
+
+.collines {
+  display: block;
+  width: 100%;
+  height: 70px;
+}
+
+.introuvable {
+  margin-top: 30px;
+  text-align: center;
+  font-size: 1.05rem;
+}
+
+.introuvable-titre {
+  font-family: 'Caveat', cursive;
+  font-size: 1.9rem;
+  color: var(--or);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .case,
+  .ampoule,
+  .case-face,
+  .case-face::after {
+    animation: none !important;
+  }
+
+  .case-porte {
+    transition-duration: 0.2s;
+  }
+}
