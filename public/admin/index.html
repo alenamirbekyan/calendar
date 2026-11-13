@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#173d33">
   <meta name="robots" content="noindex">
+  <meta name="referrer" content="no-referrer">
   <title>Atelier des lutins</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,7 +15,11 @@
 <body>
   <header class="barre">
     <a href="#/" class="barre-logo">Atelier des lutins</a>
-    <button type="button" id="bouton-deconnexion" class="lien-discret" hidden>Se déconnecter</button>
+    <nav id="barre-menu" class="barre-menu" hidden>
+      <a href="#/compte" id="lien-mon-compte" class="lien-discret"></a>
+      <a href="#/comptes" id="lien-comptes" class="lien-discret" hidden>Comptes</a>
+      <button type="button" id="bouton-deconnexion" class="lien-discret">Se déconnecter</button>
+    </nav>
   </header>
 
   <main class="contenu">
@@ -22,6 +27,10 @@
     <section id="vue-connexion" class="vue vue-connexion" hidden>
       <form id="formulaire-connexion" class="carton">
         <h1>Entrée de l'atelier</h1>
+        <label class="champ">
+          <span>Identifiant</span>
+          <input type="text" name="identifiant" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" required>
+        </label>
         <label class="champ">
           <span>Mot de passe</span>
           <input type="password" name="motDePasse" autocomplete="current-password" required>
@@ -47,9 +56,7 @@
       <div class="entete-vue">
         <h1 id="edition-titre"></h1>
         <div class="actions-lien">
-          <a id="lien-voir" class="bouton" target="_blank" rel="noopener">Voir</a>
           <a id="lien-apercu" class="bouton" target="_blank" rel="noopener">Aperçu complet</a>
-          <button type="button" id="bouton-copier" class="bouton">Copier le lien</button>
         </div>
       </div>
 
@@ -65,11 +72,98 @@
           </div>
         </form>
 
-        <div class="carton">
-          <h2>Les 24 cases</h2>
-          <p class="aide">Touchez une case pour y mettre un texte, une image, ou les deux.</p>
-          <ol id="grille-jours" class="grille-jours"></ol>
+        <div class="pile">
+          <section class="carton">
+            <h2>Liens d'accès</h2>
+            <p class="aide">
+              Chaque destinataire reçoit son propre lien secret : sans lui, impossible d'ouvrir le calendrier.
+              Supprimer un lien le désactive aussitôt.
+            </p>
+            <ul id="liste-liens" class="liste-liens"></ul>
+            <p id="liens-vide" class="liens-vide">Aucun lien pour l'instant : personne ne peut voir ce calendrier.</p>
+            <form id="formulaire-lien">
+              <div class="formulaire-ligne">
+                <input type="text" name="nom" maxlength="60" placeholder="Pour qui ? (ex. Léa)" aria-label="Nom du destinataire" required>
+                <button type="submit" class="bouton bouton--principal">Générer un lien</button>
+              </div>
+              <p class="erreur" data-erreur></p>
+            </form>
+          </section>
+
+          <section class="carton">
+            <h2>Les 24 cases</h2>
+            <p class="aide">Touchez une case pour y mettre un texte, une image, ou les deux.</p>
+            <ol id="grille-jours" class="grille-jours"></ol>
+          </section>
         </div>
+      </div>
+    </section>
+
+    <!-- Mon compte -->
+    <section id="vue-compte" class="vue" hidden>
+      <a href="#/" class="retour">&larr; Tous les calendriers</a>
+      <div class="entete-vue">
+        <h1>Mon compte</h1>
+      </div>
+      <form id="formulaire-mon-mot-de-passe" class="carton carton--etroit">
+        <h2>Changer de mot de passe</h2>
+        <input type="text" name="identifiant" autocomplete="username" hidden>
+        <label class="champ">
+          <span>Mot de passe actuel</span>
+          <input type="password" name="actuel" autocomplete="current-password" required>
+        </label>
+        <label class="champ">
+          <span>Nouveau mot de passe</span>
+          <input type="password" name="nouveau" autocomplete="new-password" minlength="10" required>
+          <small>10 caractères minimum.</small>
+        </label>
+        <label class="champ">
+          <span>Nouveau mot de passe, encore</span>
+          <input type="password" name="confirmation" autocomplete="new-password" minlength="10" required>
+        </label>
+        <p class="erreur" data-erreur></p>
+        <button type="submit" class="bouton bouton--principal">Enregistrer</button>
+      </form>
+    </section>
+
+    <!-- Comptes admin (super admin) -->
+    <section id="vue-comptes" class="vue" hidden>
+      <a href="#/" class="retour">&larr; Tous les calendriers</a>
+      <div class="entete-vue">
+        <h1>Comptes admin</h1>
+      </div>
+      <p class="aide aide--entete">
+        Chaque compte ne voit que ses propres calendriers. Le super admin gère les comptes, mais ne voit pas non plus les calendriers des autres.
+      </p>
+
+      <div class="edition-colonnes">
+        <form id="formulaire-nouveau-compte" class="carton reglages">
+          <h2>Nouveau compte</h2>
+          <label class="champ">
+            <span>Identifiant</span>
+            <input type="text" name="identifiant" maxlength="40" pattern="[a-z0-9._\-]{3,40}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required>
+            <small>Minuscules, chiffres, point et tiret.</small>
+          </label>
+          <label class="champ">
+            <span>Mot de passe provisoire</span>
+            <input type="text" name="motDePasse" minlength="10" autocomplete="off" spellcheck="false" required>
+            <small>À transmettre à la personne, qui pourra le changer dans « Mon compte ».</small>
+          </label>
+          <label class="coche">
+            <input type="checkbox" name="estSuperAdmin">
+            <span>
+              <strong>Super admin</strong>
+              <small>Peut créer et supprimer des comptes.</small>
+            </span>
+          </label>
+          <p class="erreur" data-erreur></p>
+          <button type="submit" class="bouton bouton--principal">Créer le compte</button>
+        </form>
+
+        <section class="carton">
+          <h2>Comptes existants</h2>
+          <ul id="liste-comptes" class="liste-comptes"></ul>
+        </section>
       </div>
     </section>
   </main>
@@ -79,14 +173,6 @@
     <label class="champ">
       <span>Titre</span>
       <input type="text" name="titre" maxlength="80" placeholder="Pour Léa" required>
-    </label>
-    <label class="champ">
-      <span>Adresse du calendrier</span>
-      <span class="champ-prefixe">
-        <span data-prefixe-adresse></span>
-        <input type="text" name="slug" maxlength="60" pattern="[a-z0-9]+(-[a-z0-9]+)*" required autocapitalize="off" autocorrect="off" spellcheck="false">
-      </span>
-      <small>Minuscules, chiffres et tirets. Gardez une petite partie aléatoire pour qu'elle reste secrète.</small>
     </label>
     <label class="champ">
       <span>Année</span>
@@ -100,7 +186,7 @@
       <input type="checkbox" name="modeTest">
       <span>
         <strong>Test date</strong>
-        <small>Ignore les dates : toutes les cases s'ouvrent, pour tout le monde. À décocher avant de partager le lien.</small>
+        <small>Ignore les dates : toutes les cases s'ouvrent, pour tous les liens. À décocher avant de partager.</small>
       </span>
     </label>
   </template>
@@ -140,6 +226,22 @@
           <button type="button" id="jour-retirer-image" class="bouton">Retirer l'image</button>
         </div>
       </div>
+      <p class="erreur" data-erreur></p>
+      <div class="dialogue-actions">
+        <button type="button" class="bouton" data-fermer>Annuler</button>
+        <button type="submit" class="bouton bouton--principal">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Nouveau mot de passe pour un autre compte (super admin) -->
+  <dialog id="dialogue-mot-de-passe" class="dialogue">
+    <form id="formulaire-mot-de-passe" class="dialogue-contenu">
+      <h2 id="mot-de-passe-titre"></h2>
+      <label class="champ">
+        <span>Nouveau mot de passe provisoire</span>
+        <input type="text" name="motDePasse" minlength="10" autocomplete="off" spellcheck="false" required>
+      </label>
       <p class="erreur" data-erreur></p>
       <div class="dialogue-actions">
         <button type="button" class="bouton" data-fermer>Annuler</button>

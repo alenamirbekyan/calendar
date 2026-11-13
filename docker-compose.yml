@@ -1,0 +1,43 @@
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: calendrier-de-l-avent-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: calendrier
+      POSTGRES_USER: calendrier
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?définir POSTGRES_PASSWORD dans .env}
+    volumes:
+      - base:/var/lib/postgresql/data
+    # Uniquement sur la machine locale : utile pour lancer l'appli avec « npm start » hors Docker
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U calendrier -d calendrier"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  calendrier:
+    build: .
+    image: calendrier-de-l-avent
+    container_name: calendrier-de-l-avent
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    # ADMIN_LOGIN, ADMIN_PASSWORD, SESSION_SECRET, DATE_SIMULEE... (voir .env.example)
+    env_file: .env
+    environment:
+      # Dans Docker, la base s'appelle « db » (remplace l'adresse localhost du .env)
+      DATABASE_URL: postgres://calendrier:${POSTGRES_PASSWORD}@db:5432/calendrier
+      # Le jour de chaque case dépend de la date du serveur : on fixe le fuseau
+      TZ: Europe/Paris
+    volumes:
+      - donnees:/app/data
+
+volumes:
+  base:
+  donnees:

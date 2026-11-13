@@ -25,8 +25,16 @@
   };
 
   const mouvementReduit = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const slug = decodeURIComponent(window.location.pathname.split('/')[2] || '');
-  const modeApercu = new URLSearchParams(window.location.search).get('apercu') === '1';
+  // Deux adresses possibles :
+  //   /c/<jeton>     lien d'un destinataire
+  //   /apercu/<id>   aperçu complet, réservé à l'admin propriétaire
+  const morceauxDuChemin = window.location.pathname.split('/');
+  const typeDePage = morceauxDuChemin[1];
+  const identifiantDansLUrl = encodeURIComponent(decodeURIComponent(morceauxDuChemin[2] || ''));
+  const adresseApi =
+    typeDePage === 'apercu'
+      ? `/admin/api/calendriers/${identifiantDansLUrl}/apercu`
+      : `/api/c/${identifiantDansLUrl}`;
 
   let calendrier = null;
   let casesOuvertes = new Set();
@@ -61,11 +69,7 @@
     return copie;
   }
 
-  // ---------- Mémoire des cases déjà ouvertes (dans le navigateur) ----------
-
-  function cleDeMemoire() {
-    return `avent:${slug}:${calendrier.annee}`;
-  }
+  // ---------- Mémoire des cases déjà ouvertes (sur le serveur, par lien) ----------
 
   // En aperçu ou en test, on ne mémorise rien : les portes seront bien fermées le jour venu
   function toutEstOuvertPourEssai() {
@@ -76,23 +80,16 @@
     if (toutEstOuvertPourEssai()) {
       return new Set();
     }
-    try {
-      const valeur = JSON.parse(localStorage.getItem(cleDeMemoire()) || '[]');
-      return new Set(valeur);
-    } catch {
-      return new Set();
-    }
+    return new Set(calendrier.casesOuvertes || []);
   }
 
-  function memoriserCasesOuvertes() {
-    if (toutEstOuvertPourEssai()) {
+  function memoriserOuverture(numero) {
+    if (toutEstOuvertPourEssai() || typeDePage !== 'c') {
       return;
     }
-    try {
-      localStorage.setItem(cleDeMemoire(), JSON.stringify([...casesOuvertes]));
-    } catch {
-      // stockage indisponible (navigation privée) : tant pis, rien de grave
-    }
+    const adresse = `/api/c/${identifiantDansLUrl}/ouvertures/${numero}`;
+    // Sans réponse attendue : si l'envoi échoue, la case s'ouvre quand même à l'écran
+    fetch(adresse, { method: 'POST' }).catch(() => {});
   }
 
   // ---------- Dates ----------
@@ -196,7 +193,7 @@
   }
 
   function construireGrille() {
-    const hasard = creerHasard(empreinteDuTexte(slug));
+    const hasard = creerHasard(empreinteDuTexte(calendrier.graine));
     const joursMelanges = melanger(calendrier.jours, hasard);
 
     const grille = document.createElement('div');
@@ -226,7 +223,7 @@
 
     bouton.classList.add('est-ouverte');
     casesOuvertes.add(jour.numero);
-    memoriserCasesOuvertes();
+    memoriserOuverture(jour.numero);
     lancerEtincelles(bouton);
     setTimeout(() => afficherCarte(jour), mouvementReduit ? 150 : 700);
   }
@@ -452,8 +449,7 @@
       lancerNeige();
     }
 
-    const adresse = `/api/calendriers/${encodeURIComponent(slug)}${modeApercu ? '?apercu=1' : ''}`;
-    const reponse = await fetch(adresse);
+    const reponse = await fetch(adresseApi);
     if (!reponse.ok) {
       elements.titre.textContent = 'Oh oh oh...';
       elements.introuvable.hidden = false;

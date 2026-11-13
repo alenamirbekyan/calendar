@@ -198,30 +198,6 @@ textarea:focus {
   border-color: transparent;
 }
 
-.champ-prefixe {
-  display: flex;
-  align-items: stretch;
-  border: 1px solid var(--bordure);
-  border-radius: 8px;
-  background: #fff;
-  overflow: hidden;
-}
-
-.champ-prefixe > span {
-  display: flex;
-  align-items: center;
-  padding: 0 4px 0 12px;
-  color: var(--encre-douce);
-  font-size: 0.9rem;
-  white-space: nowrap;
-}
-
-.champ-prefixe input {
-  border: 0;
-  min-width: 0;
-  padding-left: 0;
-}
-
 /* Case à cocher « Test date » */
 .coche {
   display: flex;
@@ -594,4 +570,101 @@ textarea:focus {
 .notification.est-visible {
   transform: translate(-50%, 0);
   opacity: 1;
+}
+
+/* ---------- Menu de la barre ---------- */
+
+.barre-menu {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px 14px;
+}
+
+/* ---------- Colonnes empilées, cartons étroits ---------- */
+
+.pile {
+  display: grid;
+  gap: 16px;
+}
+
+.carton--etroit {
+  max-width: 460px;
+}
+
+.aide--entete {
+  margin: -8px 0 18px;
+}
+
+/* ---------- Liens d'accès ---------- */
+
+.liste-liens,
+.liste-comptes {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+}
+
+.lien-acces,
+.compte {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--bordure);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.lien-adresse {
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--fond);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.lien-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.lien-actions .bouton {
+  min-height: 38px;
+  padding: 0 12px;
+  font-size: 0.88rem;
+}
+
+.liens-vide {
+  margin: 0 0 14px;
+  color: var(--encre-douce);
+  font-size: 0.9rem;
+}
+
+.formulaire-ligne {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.formulaire-ligne input {
+  flex: 1 1 180px;
+}
+
+.badge-role {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--sapin);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 600;
+  vertical-align: middle;
 }

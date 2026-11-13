@@ -1,44 +1,75 @@
 # Calendrier de l'Avent
 
-Petite application Node.js pour créer des calendriers de l'Avent personnalisés.
+Petite application Node.js + PostgreSQL pour créer des calendriers de l'Avent personnalisés.
 
-- **Backoffice** (`/admin/`) : créer plusieurs calendriers, remplir chacune des 24 cases avec un texte, une image, ou les deux.
-- **Page publique** (`/c/<adresse>`) : pensée pour le mobile. Une case s'ouvre à partir du jour correspondant, d'après la **date système du serveur**. Le contenu des cases futures n'est jamais envoyé au navigateur.
+- **Backoffice** (`/admin/`) : chaque admin a son compte et ne voit que **ses** calendriers. Il remplit les 24 cases (texte, image, ou les deux) et génère un **lien secret par destinataire**.
+- **Page publique** (`/c/<jeton>`) : pensée pour le mobile. On n'y accède qu'avec un lien généré par l'admin. Une case s'ouvre à partir du jour correspondant, d'après la **date système du serveur**. Le contenu des cases futures n'est jamais envoyé au navigateur.
 
-## Démarrage
+## Avec Docker (recommandé)
+
+```bash
+cp .env.example .env   # puis définir POSTGRES_PASSWORD, ADMIN_PASSWORD et SESSION_SECRET
+docker compose up -d --build
+```
+
+- Deux conteneurs : `db` (PostgreSQL 17) et `calendrier` (l'application, port 3000, utilisateur `node`).
+- L'application attend que la base soit prête avant de démarrer.
+- Données : volume `base` pour PostgreSQL, volume `donnees` (`/app/data`) pour les images. `docker compose down -v` efface tout.
+- Le fuseau horaire est fixé à `Europe/Paris` : c'est lui qui décide à quelle heure la case du jour s'ouvre.
+- Mise à jour après un `git pull` : `docker compose up -d --build`.
+
+## Sans Docker pour l'application
+
+La base tourne quand même dans Docker, l'application en local :
 
 ```bash
 npm install
-cp .env.example .env   # puis définir ADMIN_PASSWORD et SESSION_SECRET
+cp .env.example .env          # DATABASE_URL pointe sur localhost:5432
+docker compose up -d db       # PostgreSQL seul, exposé sur 127.0.0.1:5432
 npm start
 ```
 
-Puis ouvrir `http://localhost:3000/admin/`.
+## Comptes admin
+
+- Au **premier démarrage**, si la base ne contient aucun compte, un super admin est créé avec `ADMIN_LOGIN` / `ADMIN_PASSWORD`. Ensuite ces deux variables ne servent plus.
+- Le **super admin** gère les comptes (menu « Comptes ») : création avec un mot de passe provisoire, nouveau mot de passe, suppression. Supprimer un compte supprime aussi ses calendriers et leurs images.
+- Chaque admin change son mot de passe dans « Mon compte » (10 caractères minimum).
+- **Isolation** : toutes les requêtes du backoffice sont filtrées sur le compte connecté. Personne, super admin compris, ne peut lire, modifier ou prévisualiser le calendrier d'un autre.
+- Mots de passe hachés avec scrypt. Sessions stockées en base (table `sessions`) : elles survivent aux redémarrages.
+
+## Liens d'accès
+
+- Dans l'édition d'un calendrier, « Générer un lien » crée un lien nominatif (ex. « Léa ») du type `https://votre-site/c/Xk3...` avec un jeton aléatoire de 32 caractères. Le lien est copié automatiquement.
+- Un calendrier peut avoir autant de liens que de destinataires. Supprimer un lien le désactive aussitôt, sans toucher aux autres.
+- La date de dernière visite de chaque lien est affichée.
+- Sans lien valide, la page affiche « calendrier introuvable ».
+- Les pages envoient `Referrer-Policy: no-referrer` et `noindex` : les jetons ne fuient pas vers d'autres sites ni dans les moteurs de recherche.
 
 ## Configuration (`.env`)
 
-| Variable         | Rôle                                                                 |
-| ---------------- | -------------------------------------------------------------------- |
-| `PORT`           | Port d'écoute (3000 par défaut)                                      |
-| `ADMIN_PASSWORD` | Mot de passe du backoffice (obligatoire)                             |
-| `SESSION_SECRET` | Secret des cookies de session                                        |
-| `DATE_SIMULEE`   | Pour tester : force la date du jour (`AAAA-MM-JJ`). Vide en prod.   |
-| `TZ`             | Fuseau horaire du serveur si besoin (ex. `Europe/Paris`)             |
+| Variable            | Rôle                                                                        |
+| ------------------- | --------------------------------------------------------------------------- |
+| `PORT`              | Port d'écoute (3000 par défaut)                                             |
+| `POSTGRES_PASSWORD` | Mot de passe de la base (lettres et chiffres, il est repris dans une URL)  |
+| `DATABASE_URL`      | Adresse de la base pour `npm start` (remplacée automatiquement dans Docker) |
+| `ADMIN_LOGIN`       | Identifiant du premier super admin (`admin` par défaut)                     |
+| `ADMIN_PASSWORD`    | Mot de passe du premier super admin                                         |
+| `SESSION_SECRET`    | Secret des cookies de session                                               |
+| `DATE_SIMULEE`      | Pour tester : force la date du jour (`AAAA-MM-JJ`). Vide en prod.          |
+| `TZ`                | Fuseau horaire du serveur si besoin (ex. `Europe/Paris`)                    |
 
 ## Fonctionnement
 
 - Avant le 1er décembre : toutes les cases sont fermées, la page affiche un compte à rebours.
 - Du 1er au 24 décembre : les cases jusqu'au jour courant s'ouvrent, celle du jour est mise en avant.
 - À partir du 25 décembre : toutes les cases sont ouvertes.
-- Les cases déjà ouvertes sont mémorisées dans le navigateur du visiteur.
-- Le lien « Aperçu complet » du backoffice (`?apercu=1`) ouvre toutes les cases, uniquement pour un admin connecté.
-- La coche **Test date** (réglages d'un calendrier) fait sauter les verrous de date pour **tous les visiteurs** de ce calendrier. Les ouvertures ne sont alors pas mémorisées, les portes seront donc bien refermées une fois la coche retirée. Un badge « test date » le signale dans la liste.
+- Les cases déjà ouvertes sont enregistrées en base, **par lien** : le destinataire les retrouve sur n'importe quel appareil, et le backoffice affiche combien de cases chaque lien a ouvertes. Changer l'année d'un calendrier referme toutes ses cases.
+- « Aperçu complet » (`/apercu/<id>`) ouvre toutes les cases, uniquement pour l'admin propriétaire connecté.
+- La coche **Test date** (réglages d'un calendrier) fait sauter les verrous de date pour **tous les liens** de ce calendrier. Les ouvertures ne sont alors pas mémorisées. Un badge « test date » le signale dans la liste.
 
 ## Données
 
-Tout est stocké dans `data/` (ignoré par git) :
+- PostgreSQL : tables `admins`, `calendriers`, `jours`, `liens`, `ouvertures`, `sessions` (schéma dans `src/schema.sql`, appliqué au démarrage).
+- `data/uploads/` : les images (noms aléatoires, réduites à 1600 px côté navigateur avant envoi).
 
-- `data/calendriers.json` : les calendriers et leurs cases
-- `data/uploads/` : les images (noms aléatoires, réduites à 1600 px côté navigateur avant envoi)
-
-Sauvegarder ce dossier suffit pour tout conserver.
+Sauvegarde : `docker compose exec db pg_dump -U calendrier calendrier > sauvegarde.sql`, plus le volume `donnees`.

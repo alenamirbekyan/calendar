@@ -1,23 +1,30 @@
-// Backoffice : gestion des calendriers et de leurs 24 cases.
+// Backoffice : comptes, calendriers, liens d'accès et 24 cases.
 'use strict';
 
 (function () {
   const TAILLE_MAX_IMAGE = 1600; // en pixels, côté le plus long
-  const PREFIXE_ADRESSE = `${window.location.host}/c/`;
 
   const vues = {
     connexion: document.getElementById('vue-connexion'),
     liste: document.getElementById('vue-liste'),
     edition: document.getElementById('vue-edition'),
+    compte: document.getElementById('vue-compte'),
+    comptes: document.getElementById('vue-comptes'),
   };
 
-  const boutonDeconnexion = document.getElementById('bouton-deconnexion');
+  const barreMenu = document.getElementById('barre-menu');
   const dialogueCreation = document.getElementById('dialogue-creation');
   const formulaireCreation = document.getElementById('formulaire-creation');
   const formulaireReglages = document.getElementById('formulaire-reglages');
+  const formulaireLien = document.getElementById('formulaire-lien');
   const dialogueJour = document.getElementById('dialogue-jour');
   const formulaireJour = document.getElementById('formulaire-jour');
+  const formulaireMonMotDePasse = document.getElementById('formulaire-mon-mot-de-passe');
+  const formulaireNouveauCompte = document.getElementById('formulaire-nouveau-compte');
+  const dialogueMotDePasse = document.getElementById('dialogue-mot-de-passe');
+  const formulaireMotDePasse = document.getElementById('formulaire-mot-de-passe');
 
+  let sessionEnCours = null; // { identifiant, estSuperAdmin }
   let calendrierEnCours = null;
 
   // ---------- Outils ----------
@@ -37,6 +44,7 @@
     const donnees = await reponse.json().catch(() => ({}));
 
     if (reponse.status === 401 && !adresse.endsWith('/connexion')) {
+      sessionEnCours = null;
       afficherVue('connexion');
       throw new ErreurNonConnecte('Session expirée');
     }
@@ -50,7 +58,7 @@
     for (const [cle, element] of Object.entries(vues)) {
       element.hidden = cle !== nom;
     }
-    boutonDeconnexion.hidden = nom === 'connexion';
+    barreMenu.hidden = nom === 'connexion';
     window.scrollTo(0, 0);
   }
 
@@ -67,22 +75,31 @@
     minuterieNotification = setTimeout(() => element.classList.remove('est-visible'), 2500);
   }
 
-  function slugifier(texte) {
-    return texte
-      .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '') // retire les accents
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 40);
+  function adresseDuLien(jeton) {
+    return `${window.location.origin}/c/${jeton}`;
   }
 
-  function suffixeAleatoire() {
-    return Math.random().toString(36).slice(2, 6);
+  function formaterDate(texteIso) {
+    return new Date(texteIso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
   }
 
-  function adressePublique(slug) {
-    return `${window.location.origin}/c/${slug}`;
+  function formaterDateEtHeure(texteIso) {
+    return new Date(texteIso).toLocaleString('fr-FR', {
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+
+  async function copier(texte) {
+    try {
+      await navigator.clipboard.writeText(texte);
+      notifier('Lien copié');
+    } catch {
+      // Le presse-papiers n'est disponible qu'en HTTPS ou sur localhost
+      window.prompt('Copiez ce lien :', texte);
+    }
   }
 
   // Bloque les boutons d'un formulaire pendant un envoi
@@ -96,12 +113,54 @@
     }
   }
 
+  // Action destructrice en deux temps, sans fenêtre de confirmation :
+  // premier appui = armer, second appui dans les 4 secondes = exécuter.
+  function boutonADoubleConfirmation(bouton, libelle, action) {
+    let minuterie = null;
+
+    function desarmer() {
+      clearTimeout(minuterie);
+      bouton.classList.remove('est-arme');
+      bouton.textContent = libelle;
+    }
+
+    bouton.textContent = libelle;
+    bouton.addEventListener('click', async () => {
+      if (!bouton.classList.contains('est-arme')) {
+        bouton.classList.add('est-arme');
+        bouton.textContent = 'Toucher encore pour confirmer';
+        minuterie = setTimeout(desarmer, 4000);
+        return;
+      }
+      desarmer();
+      bouton.disabled = true;
+      try {
+        await action();
+      } catch (erreur) {
+        if (!(erreur instanceof ErreurNonConnecte)) {
+          notifier(erreur.message);
+        }
+      } finally {
+        bouton.disabled = false;
+      }
+    });
+
+    return desarmer;
+  }
+
+  function creerBouton(libelle, classes) {
+    const bouton = document.createElement('button');
+    bouton.type = 'button';
+    bouton.className = classes;
+    bouton.textContent = libelle;
+    return bouton;
+  }
+
   // Les champs du calendrier sont partagés entre création et réglages
   function insererChampsCalendrier() {
     const modele = document.getElementById('modele-champs-calendrier');
     for (const conteneur of document.querySelectorAll('[data-champs-calendrier]')) {
       conteneur.appendChild(modele.content.cloneNode(true));
-      conteneur.querySelector('[data-prefixe-adresse]').textContent = PREFIXE_ADRESSE;
     }
   }
 
@@ -111,14 +170,28 @@
   function lireChampsCalendrier(formulaire) {
     return {
       titre: formulaire.elements.titre.value,
-      slug: formulaire.elements.slug.value,
       annee: Number(formulaire.elements.annee.value),
       message: formulaire.elements.message.value,
       modeTest: formulaire.elements.modeTest.checked,
     };
   }
 
-  // ---------- Connexion ----------
+  // ---------- Session ----------
+
+  function appliquerSession(session) {
+    sessionEnCours = session;
+    document.getElementById('lien-mon-compte').textContent = session.identifiant;
+    document.getElementById('lien-comptes').hidden = !session.estSuperAdmin;
+  }
+
+  async function chargerSession() {
+    const session = await appelerApi('GET', '/admin/api/session');
+    if (session.connecte) {
+      appliquerSession(session);
+      return true;
+    }
+    return false;
+  }
 
   document.getElementById('formulaire-connexion').addEventListener('submit', async (evenement) => {
     evenement.preventDefault();
@@ -126,21 +199,31 @@
     afficherErreur(formulaire, '');
     await pendantEnvoi(formulaire, async () => {
       try {
-        await appelerApi('POST', '/admin/api/connexion', { motDePasse: formulaire.elements.motDePasse.value });
+        await appelerApi('POST', '/admin/api/connexion', {
+          identifiant: formulaire.elements.identifiant.value,
+          motDePasse: formulaire.elements.motDePasse.value,
+        });
         formulaire.reset();
-        naviguer();
+        await chargerSession();
+        // Changer le hash déclenche déjà la navigation
+        if (window.location.hash === '#/') {
+          naviguer();
+        } else {
+          window.location.hash = '#/';
+        }
       } catch (erreur) {
         afficherErreur(formulaire, erreur.message);
       }
     });
   });
 
-  boutonDeconnexion.addEventListener('click', async () => {
+  document.getElementById('bouton-deconnexion').addEventListener('click', async () => {
     await appelerApi('POST', '/admin/api/deconnexion');
+    sessionEnCours = null;
     afficherVue('connexion');
   });
 
-  // ---------- Liste ----------
+  // ---------- Liste des calendriers ----------
 
   async function afficherListe() {
     const calendriers = await appelerApi('GET', '/admin/api/calendriers');
@@ -161,9 +244,10 @@
         titre.append(' ', badge);
       }
 
-      const adresse = document.createElement('span');
-      adresse.className = 'fiche-adresse';
-      adresse.textContent = `${calendrier.annee} · /c/${calendrier.slug}`;
+      const infos = document.createElement('span');
+      infos.className = 'fiche-adresse';
+      const libelleLiens = calendrier.nombreLiens === 1 ? '1 lien' : `${calendrier.nombreLiens} liens`;
+      infos.textContent = `${calendrier.annee} · ${libelleLiens}`;
 
       const progression = document.createElement('div');
       progression.className = 'progression';
@@ -182,43 +266,26 @@
       lienModifier.className = 'bouton bouton--principal';
       lienModifier.href = `#/c/${calendrier.id}`;
       lienModifier.textContent = 'Modifier';
-      const lienVoir = document.createElement('a');
-      lienVoir.className = 'bouton';
-      lienVoir.href = `/c/${calendrier.slug}`;
-      lienVoir.target = '_blank';
-      lienVoir.rel = 'noopener';
-      lienVoir.textContent = 'Voir';
-      actions.append(lienModifier, lienVoir);
+      const lienApercu = document.createElement('a');
+      lienApercu.className = 'bouton';
+      lienApercu.href = `/apercu/${calendrier.id}`;
+      lienApercu.target = '_blank';
+      lienApercu.rel = 'noopener';
+      lienApercu.textContent = 'Aperçu';
+      actions.append(lienModifier, lienApercu);
 
-      fiche.append(titre, adresse, progression, compteur, actions);
+      fiche.append(titre, infos, progression, compteur, actions);
       liste.appendChild(fiche);
     }
   }
 
-  // ---------- Création ----------
-
-  let slugModifieALaMain = false;
-  let suffixeCreation = '';
+  // ---------- Création d'un calendrier ----------
 
   document.getElementById('bouton-nouveau').addEventListener('click', () => {
     formulaireCreation.reset();
     afficherErreur(formulaireCreation, '');
-    slugModifieALaMain = false;
-    suffixeCreation = suffixeAleatoire();
     formulaireCreation.elements.annee.value = new Date().getFullYear();
     dialogueCreation.showModal();
-  });
-
-  formulaireCreation.elements.titre.addEventListener('input', () => {
-    if (slugModifieALaMain) {
-      return;
-    }
-    const base = slugifier(formulaireCreation.elements.titre.value);
-    formulaireCreation.elements.slug.value = base ? `${base}-${suffixeCreation}` : '';
-  });
-
-  formulaireCreation.elements.slug.addEventListener('input', () => {
-    slugModifieALaMain = true;
   });
 
   formulaireCreation.addEventListener('submit', async (evenement) => {
@@ -240,23 +307,22 @@
   async function afficherEdition(id) {
     calendrierEnCours = await appelerApi('GET', `/admin/api/calendriers/${encodeURIComponent(id)}`);
     remplirReglages();
+    afficherLiens();
     afficherGrilleJours();
   }
 
   function remplirReglages() {
     const calendrier = calendrierEnCours;
     document.getElementById('edition-titre').textContent = calendrier.titre;
-    document.getElementById('lien-voir').href = `/c/${calendrier.slug}`;
-    document.getElementById('lien-apercu').href = `/c/${calendrier.slug}?apercu=1`;
+    document.getElementById('lien-apercu').href = `/apercu/${calendrier.id}`;
 
     const champs = formulaireReglages.elements;
     champs.titre.value = calendrier.titre;
-    champs.slug.value = calendrier.slug;
     champs.annee.value = calendrier.annee;
     champs.message.value = calendrier.message || '';
     champs.modeTest.checked = calendrier.modeTest === true;
     afficherErreur(formulaireReglages, '');
-    desarmerSuppression();
+    desarmerSuppressionCalendrier();
   }
 
   formulaireReglages.addEventListener('submit', async (evenement) => {
@@ -264,13 +330,13 @@
     afficherErreur(formulaireReglages, '');
     await pendantEnvoi(formulaireReglages, async () => {
       try {
-        const misAJour = await appelerApi(
+        calendrierEnCours = await appelerApi(
           'PUT',
           `/admin/api/calendriers/${calendrierEnCours.id}`,
           lireChampsCalendrier(formulaireReglages)
         );
-        calendrierEnCours = misAJour;
         remplirReglages();
+        afficherLiens();
         notifier('Réglages enregistrés');
       } catch (erreur) {
         afficherErreur(formulaireReglages, erreur.message);
@@ -278,38 +344,85 @@
     });
   });
 
-  document.getElementById('bouton-copier').addEventListener('click', async () => {
-    const adresse = adressePublique(calendrierEnCours.slug);
-    try {
-      await navigator.clipboard.writeText(adresse);
-      notifier('Lien copié');
-    } catch {
-      // Le presse-papiers n'est disponible qu'en HTTPS ou sur localhost
-      window.prompt('Copiez ce lien :', adresse);
+  const desarmerSuppressionCalendrier = boutonADoubleConfirmation(
+    document.getElementById('bouton-supprimer'),
+    'Supprimer ce calendrier',
+    async () => {
+      await appelerApi('DELETE', `/admin/api/calendriers/${calendrierEnCours.id}`);
+      notifier('Calendrier supprimé');
+      window.location.hash = '#/';
     }
-  });
+  );
 
-  // Suppression en deux temps, sans fenêtre de confirmation
-  const boutonSupprimer = document.getElementById('bouton-supprimer');
-  let minuterieSuppression = null;
+  // ---------- Liens d'accès ----------
 
-  function desarmerSuppression() {
-    clearTimeout(minuterieSuppression);
-    boutonSupprimer.classList.remove('est-arme');
-    boutonSupprimer.textContent = 'Supprimer ce calendrier';
+  function afficherLiens() {
+    const liste = document.getElementById('liste-liens');
+    liste.replaceChildren();
+    document.getElementById('liens-vide').hidden = calendrierEnCours.liens.length > 0;
+
+    for (const lien of calendrierEnCours.liens) {
+      const element = document.createElement('li');
+      element.className = 'lien-acces';
+
+      const nom = document.createElement('strong');
+      nom.textContent = lien.nom;
+
+      const adresse = document.createElement('code');
+      adresse.className = 'lien-adresse';
+      adresse.textContent = adresseDuLien(lien.jeton);
+
+      const visite = document.createElement('small');
+      visite.className = 'fiche-adresse';
+      const texteVisite = lien.derniereVisite
+        ? `dernière visite le ${formaterDateEtHeure(lien.derniereVisite)}`
+        : 'jamais ouvert';
+      const texteOuvertures = lien.casesOuvertes === 1 ? '1 case ouverte' : `${lien.casesOuvertes} cases ouvertes`;
+      visite.textContent = `Créé le ${formaterDate(lien.creeLe)} · ${texteVisite} · ${texteOuvertures}`;
+
+      const actions = document.createElement('div');
+      actions.className = 'lien-actions';
+
+      const boutonCopier = creerBouton('Copier', 'bouton');
+      boutonCopier.addEventListener('click', () => copier(adresseDuLien(lien.jeton)));
+
+      const lienOuvrir = document.createElement('a');
+      lienOuvrir.className = 'bouton';
+      lienOuvrir.href = adresseDuLien(lien.jeton);
+      lienOuvrir.target = '_blank';
+      lienOuvrir.rel = 'noopener noreferrer';
+      lienOuvrir.textContent = 'Ouvrir';
+
+      const boutonSupprimer = creerBouton('', 'bouton bouton--danger');
+      boutonADoubleConfirmation(boutonSupprimer, 'Supprimer', async () => {
+        await appelerApi('DELETE', `/admin/api/calendriers/${calendrierEnCours.id}/liens/${lien.id}`);
+        calendrierEnCours.liens = calendrierEnCours.liens.filter((autre) => autre.id !== lien.id);
+        afficherLiens();
+        notifier('Lien désactivé');
+      });
+
+      actions.append(boutonCopier, lienOuvrir, boutonSupprimer);
+      element.append(nom, adresse, visite, actions);
+      liste.appendChild(element);
+    }
   }
 
-  boutonSupprimer.addEventListener('click', async () => {
-    if (!boutonSupprimer.classList.contains('est-arme')) {
-      boutonSupprimer.classList.add('est-arme');
-      boutonSupprimer.textContent = 'Toucher encore pour confirmer';
-      minuterieSuppression = setTimeout(desarmerSuppression, 4000);
-      return;
-    }
-    desarmerSuppression();
-    await appelerApi('DELETE', `/admin/api/calendriers/${calendrierEnCours.id}`);
-    notifier('Calendrier supprimé');
-    window.location.hash = '#/';
+  formulaireLien.addEventListener('submit', async (evenement) => {
+    evenement.preventDefault();
+    afficherErreur(formulaireLien, '');
+    await pendantEnvoi(formulaireLien, async () => {
+      try {
+        const lien = await appelerApi('POST', `/admin/api/calendriers/${calendrierEnCours.id}/liens`, {
+          nom: formulaireLien.elements.nom.value,
+        });
+        calendrierEnCours.liens.push(lien);
+        formulaireLien.reset();
+        afficherLiens();
+        await copier(adresseDuLien(lien.jeton));
+      } catch (erreur) {
+        afficherErreur(formulaireLien, erreur.message);
+      }
+    });
   });
 
   // ---------- Grille des 24 cases ----------
@@ -417,7 +530,7 @@
       adresseApercuTemporaire = URL.createObjectURL(imageChoisie);
       montrerApercu(adresseApercuTemporaire);
     } catch {
-      afficherErreur(formulaireJour, "Impossible de lire cette image.");
+      afficherErreur(formulaireJour, 'Impossible de lire cette image.');
     }
   });
 
@@ -501,6 +614,137 @@
     });
   }
 
+  // ---------- Mon compte ----------
+
+  function afficherMonCompte() {
+    formulaireMonMotDePasse.reset();
+    formulaireMonMotDePasse.elements.identifiant.value = sessionEnCours.identifiant;
+    afficherErreur(formulaireMonMotDePasse, '');
+  }
+
+  formulaireMonMotDePasse.addEventListener('submit', async (evenement) => {
+    evenement.preventDefault();
+    const champs = formulaireMonMotDePasse.elements;
+    afficherErreur(formulaireMonMotDePasse, '');
+    if (champs.nouveau.value !== champs.confirmation.value) {
+      afficherErreur(formulaireMonMotDePasse, 'Les deux nouveaux mots de passe ne sont pas identiques.');
+      return;
+    }
+    await pendantEnvoi(formulaireMonMotDePasse, async () => {
+      try {
+        await appelerApi('PUT', '/admin/api/mon-compte/mot-de-passe', {
+          actuel: champs.actuel.value,
+          nouveau: champs.nouveau.value,
+        });
+        afficherMonCompte();
+        notifier('Mot de passe changé');
+      } catch (erreur) {
+        afficherErreur(formulaireMonMotDePasse, erreur.message);
+      }
+    });
+  });
+
+  // ---------- Comptes admin (super admin) ----------
+
+  async function afficherComptes() {
+    const comptes = await appelerApi('GET', '/admin/api/comptes');
+    const liste = document.getElementById('liste-comptes');
+    liste.replaceChildren();
+
+    for (const compte of comptes) {
+      const element = document.createElement('li');
+      element.className = 'compte';
+
+      const nom = document.createElement('strong');
+      nom.textContent = compte.identifiant;
+      if (compte.estSuperAdmin) {
+        const badge = document.createElement('span');
+        badge.className = 'badge-role';
+        badge.textContent = 'super admin';
+        nom.append(' ', badge);
+      }
+
+      const infos = document.createElement('small');
+      infos.className = 'fiche-adresse';
+      const libelleCalendriers =
+        compte.nombreCalendriers === 1 ? '1 calendrier' : `${compte.nombreCalendriers} calendriers`;
+      infos.textContent = `${libelleCalendriers} · créé le ${formaterDate(compte.creeLe)}`;
+
+      element.append(nom, infos);
+
+      if (compte.estMoi) {
+        const moi = document.createElement('small');
+        moi.className = 'fiche-adresse';
+        moi.textContent = "C'est vous. Changez votre mot de passe dans « Mon compte ».";
+        element.appendChild(moi);
+      } else {
+        const actions = document.createElement('div');
+        actions.className = 'lien-actions';
+
+        const boutonMotDePasse = creerBouton('Nouveau mot de passe', 'bouton');
+        boutonMotDePasse.addEventListener('click', () => ouvrirDialogueMotDePasse(compte));
+
+        const boutonSupprimer = creerBouton('', 'bouton bouton--danger');
+        boutonADoubleConfirmation(boutonSupprimer, 'Supprimer (et ses calendriers)', async () => {
+          await appelerApi('DELETE', `/admin/api/comptes/${compte.id}`);
+          notifier(`Compte « ${compte.identifiant} » supprimé`);
+          await afficherComptes();
+        });
+
+        actions.append(boutonMotDePasse, boutonSupprimer);
+        element.appendChild(actions);
+      }
+
+      liste.appendChild(element);
+    }
+  }
+
+  formulaireNouveauCompte.addEventListener('submit', async (evenement) => {
+    evenement.preventDefault();
+    const champs = formulaireNouveauCompte.elements;
+    afficherErreur(formulaireNouveauCompte, '');
+    await pendantEnvoi(formulaireNouveauCompte, async () => {
+      try {
+        const compte = await appelerApi('POST', '/admin/api/comptes', {
+          identifiant: champs.identifiant.value,
+          motDePasse: champs.motDePasse.value,
+          estSuperAdmin: champs.estSuperAdmin.checked,
+        });
+        formulaireNouveauCompte.reset();
+        notifier(`Compte « ${compte.identifiant} » créé`);
+        await afficherComptes();
+      } catch (erreur) {
+        afficherErreur(formulaireNouveauCompte, erreur.message);
+      }
+    });
+  });
+
+  let compteEnCours = null;
+
+  function ouvrirDialogueMotDePasse(compte) {
+    compteEnCours = compte;
+    formulaireMotDePasse.reset();
+    afficherErreur(formulaireMotDePasse, '');
+    document.getElementById('mot-de-passe-titre').textContent = `Mot de passe de « ${compte.identifiant} »`;
+    dialogueMotDePasse.showModal();
+  }
+
+  formulaireMotDePasse.addEventListener('submit', async (evenement) => {
+    evenement.preventDefault();
+    afficherErreur(formulaireMotDePasse, '');
+    await pendantEnvoi(formulaireMotDePasse, async () => {
+      try {
+        await appelerApi('PUT', `/admin/api/comptes/${compteEnCours.id}/mot-de-passe`, {
+          motDePasse: formulaireMotDePasse.elements.motDePasse.value,
+        });
+        dialogueMotDePasse.close();
+        notifier('Mot de passe changé');
+      } catch (erreur) {
+        afficherErreur(formulaireMotDePasse, erreur.message);
+      }
+    });
+  });
+
   // ---------- Fermeture des dialogues ----------
 
   for (const bouton of document.querySelectorAll('[data-fermer]')) {
@@ -513,25 +757,39 @@
   let compteurNavigation = 0;
 
   async function naviguer() {
+    if (!sessionEnCours) {
+      afficherVue('connexion');
+      return;
+    }
+
     compteurNavigation++;
     const cetteNavigation = compteurNavigation;
     const chemin = window.location.hash.replace(/^#/, '') || '/';
-    const correspondance = chemin.match(/^\/c\/([\w-]+)$/);
+    const correspondanceCalendrier = chemin.match(/^\/c\/([\w-]+)$/);
+
+    let vueAAfficher = 'liste';
     try {
-      if (correspondance) {
-        await afficherEdition(correspondance[1]);
+      if (correspondanceCalendrier) {
+        await afficherEdition(correspondanceCalendrier[1]);
+        vueAAfficher = 'edition';
+      } else if (chemin === '/compte') {
+        afficherMonCompte();
+        vueAAfficher = 'compte';
+      } else if (chemin === '/comptes' && sessionEnCours.estSuperAdmin) {
+        await afficherComptes();
+        vueAAfficher = 'comptes';
       } else {
         await afficherListe();
       }
       if (cetteNavigation === compteurNavigation) {
-        afficherVue(correspondance ? 'edition' : 'liste');
+        afficherVue(vueAAfficher);
       }
     } catch (erreur) {
       if (erreur instanceof ErreurNonConnecte) {
         return;
       }
       notifier(erreur.message);
-      if (correspondance) {
+      if (chemin !== '/') {
         window.location.hash = '#/';
       }
     }
@@ -539,13 +797,8 @@
 
   async function demarrer() {
     window.addEventListener('hashchange', naviguer);
-
-    const session = await appelerApi('GET', '/admin/api/session');
-    if (session.connecte) {
-      naviguer();
-    } else {
-      afficherVue('connexion');
-    }
+    await chargerSession();
+    naviguer();
   }
 
   demarrer();
