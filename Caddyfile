@@ -1,0 +1,5 @@
+# Reverse proxy HTTPS : Caddy obtient et renouvelle seul le certificat Let's Encrypt.
+# DOMAINE est défini dans .env (ex. monnom.freeboxos.fr).
+{$DOMAINE} {
+	reverse_proxy calendrier:3000
+}

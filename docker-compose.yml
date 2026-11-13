@@ -26,8 +26,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # Uniquement sur la machine locale. Depuis Internet, on passe par Caddy (profil https).
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     # ADMIN_LOGIN, ADMIN_PASSWORD, SESSION_SECRET, DATE_SIMULEE... (voir .env.example)
     env_file: .env
     environment:
@@ -38,6 +39,28 @@ services:
     volumes:
       - donnees:/app/data
 
+  # HTTPS public, à activer avec : docker compose --profile https up -d
+  # Les ports 80 et 443 de la box doivent être redirigés vers cette machine.
+  caddy:
+    image: caddy:2
+    container_name: calendrier-de-l-avent-caddy
+    profiles: ["https"]
+    restart: unless-stopped
+    depends_on:
+      - calendrier
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAINE: ${DOMAINE:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificats : à conserver, sinon Caddy en redemande à chaque recréation
+      - caddy_donnees:/data
+      - caddy_config:/config
+
 volumes:
   base:
   donnees:
+  caddy_donnees:
+  caddy_config:

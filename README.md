@@ -18,6 +18,18 @@ docker compose up -d --build
 - Le fuseau horaire est fixé à `Europe/Paris` : c'est lui qui décide à quelle heure la case du jour s'ouvre.
 - Mise à jour après un `git pull` : `docker compose up -d --build`.
 
+## HTTPS public (hébergement à la maison)
+
+Il faut un nom de domaine qui pointe vers l'IP publique, et les ports 80 et 443 de la box redirigés vers la machine.
+
+```bash
+# dans .env : DOMAINE=monnom.freeboxos.fr et TRUST_PROXY=1
+docker compose --profile https up -d --build
+docker compose logs -f caddy      # suivre l'obtention du certificat
+```
+
+Caddy obtient et renouvelle seul le certificat Let's Encrypt. Le port 3000 de l'application n'est publié que sur `127.0.0.1` : depuis Internet, tout passe par Caddy.
+
 ## Sans Docker pour l'application
 
 La base tourne quand même dans Docker, l'application en local :
@@ -35,13 +47,15 @@ npm start
 - Le **super admin** gère les comptes (menu « Comptes ») : création avec un mot de passe provisoire, nouveau mot de passe, suppression. Supprimer un compte supprime aussi ses calendriers et leurs images.
 - Chaque admin change son mot de passe dans « Mon compte » (10 caractères minimum).
 - **Isolation** : toutes les requêtes du backoffice sont filtrées sur le compte connecté. Personne, super admin compris, ne peut lire, modifier ou prévisualiser le calendrier d'un autre.
+- Après 5 mots de passe faux sur un identifiant, celui-ci est bloqué 10 minutes.
 - Mots de passe hachés avec scrypt. Sessions stockées en base (table `sessions`) : elles survivent aux redémarrages.
 
 ## Liens d'accès
 
 - Dans l'édition d'un calendrier, « Générer un lien » crée un lien nominatif (ex. « Léa ») du type `https://votre-site/c/Xk3...` avec un jeton aléatoire de 32 caractères. Le lien est copié automatiquement.
 - Un calendrier peut avoir autant de liens que de destinataires. Supprimer un lien le désactive aussitôt, sans toucher aux autres.
-- La date de dernière visite de chaque lien est affichée.
+- La date de dernière visite et le nombre de cases ouvertes de chaque lien sont affichés. Le backoffice n'a volontairement pas de bouton pour ouvrir le lien d'un destinataire : cela fausserait ce suivi. Pour vérifier le rendu, utiliser « Aperçu complet ».
+- Envoyé dans une messagerie, le lien s'affiche avec un titre et une image d'aperçu (`public/img/partage.png`).
 - Sans lien valide, la page affiche « calendrier introuvable ».
 - Les pages envoient `Referrer-Policy: no-referrer` et `noindex` : les jetons ne fuient pas vers d'autres sites ni dans les moteurs de recherche.
 
@@ -56,6 +70,8 @@ npm start
 | `ADMIN_PASSWORD`    | Mot de passe du premier super admin                                         |
 | `SESSION_SECRET`    | Secret des cookies de session                                               |
 | `DATE_SIMULEE`      | Pour tester : force la date du jour (`AAAA-MM-JJ`). Vide en prod.          |
+| `TRUST_PROXY`       | `1` si le site est servi en HTTPS derrière un proxy ou un tunnel            |
+| `DOMAINE`           | Nom de domaine public servi en HTTPS par Caddy (profil `https`)             |
 | `TZ`                | Fuseau horaire du serveur si besoin (ex. `Europe/Paris`)                    |
 
 ## Fonctionnement
@@ -63,6 +79,7 @@ npm start
 - Avant le 1er décembre : toutes les cases sont fermées, la page affiche un compte à rebours.
 - Du 1er au 24 décembre : les cases jusqu'au jour courant s'ouvrent, celle du jour est mise en avant.
 - À partir du 25 décembre : toutes les cases sont ouvertes.
+- Passage de minuit : pas besoin de recharger la page. Un clic sur la prochaine case fermée interroge le serveur, qui décide avec sa propre date.
 - Les cases déjà ouvertes sont enregistrées en base, **par lien** : le destinataire les retrouve sur n'importe quel appareil, et le backoffice affiche combien de cases chaque lien a ouvertes. Changer l'année d'un calendrier referme toutes ses cases.
 - « Aperçu complet » (`/apercu/<id>`) ouvre toutes les cases, uniquement pour l'admin propriétaire connecté.
 - La coche **Test date** (réglages d'un calendrier) fait sauter les verrous de date pour **tous les liens** de ce calendrier. Les ouvertures ne sont alors pas mémorisées. Un badge « test date » le signale dans la liste.
