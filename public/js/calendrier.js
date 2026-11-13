@@ -19,6 +19,7 @@
     introuvable: document.getElementById('introuvable'),
     carte: document.getElementById('carte'),
     carteDate: document.getElementById('carte-date'),
+    carteNoel: document.getElementById('carte-noel'),
     carteFigure: document.getElementById('carte-figure'),
     carteImage: document.getElementById('carte-image'),
     carteTexte: document.getElementById('carte-texte'),
@@ -171,6 +172,12 @@
         vignette.alt = '';
         vignette.loading = 'lazy';
         creux.appendChild(vignette);
+      } else if (jour.texte && jour.texte.trim()) {
+        // Pas d'image : un extrait du mot, visible dans l'entrebâillement de la porte
+        const extrait = document.createElement('span');
+        extrait.className = 'case-extrait';
+        extrait.textContent = jour.texte.trim();
+        creux.appendChild(extrait);
       } else {
         creux.innerHTML = '<svg aria-hidden="true"><use href="#motif-etoile"/></svg>';
       }
@@ -246,8 +253,66 @@
     memoriserOuverture(jour.numero);
     afficherProgression();
     lancerEtincelles(bouton);
-    setTimeout(() => afficherCarte(jour), mouvementReduit ? 150 : 700);
+    setTimeout(() => {
+      afficherCarte(jour);
+      if (jour.numero === DERNIER_JOUR) {
+        celebrerLaFin();
+      }
+    }, mouvementReduit ? 150 : 700);
   }
+
+  // ---------- Final : la dernière case vient d'être ouverte ----------
+
+  const DERNIER_JOUR = 24;
+  let finaleEnAttente = false;
+
+  function celebrerLaFin() {
+    lancerPluieDEtoiles();
+    // Le message de fin s'affiche quand on referme la carte
+    finaleEnAttente = true;
+  }
+
+  // La pluie est ajoutée dans la fenêtre de la carte : sinon elle passerait
+  // sous le fond assombri, qui est toujours au premier plan. Placée avant le papier,
+  // elle tombe derrière la carte et ne gêne pas la lecture.
+  function lancerPluieDEtoiles() {
+    if (mouvementReduit) {
+      return;
+    }
+    const pluie = document.createElement('div');
+    pluie.className = 'pluie';
+    pluie.setAttribute('aria-hidden', 'true');
+
+    const couleurs = ['#e2bd6b', '#f4ead6', '#ffd36b', '#ffffff'];
+    for (let i = 0; i < 70; i++) {
+      const etoile = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      etoile.setAttribute('class', 'etoile-qui-tombe');
+      etoile.innerHTML = '<use href="#motif-etoile"/>';
+      const taille = 10 + Math.random() * 18;
+      etoile.style.left = `${Math.random() * 100}%`;
+      etoile.style.width = `${taille}px`;
+      etoile.style.height = `${taille}px`;
+      etoile.style.color = couleurs[i % couleurs.length];
+      etoile.style.setProperty('--derive', `${(Math.random() - 0.5) * 120}px`);
+      etoile.style.animationDuration = `${2.6 + Math.random() * 2}s`;
+      etoile.style.animationDelay = `${Math.random() * 1.8}s`;
+      pluie.appendChild(etoile);
+    }
+    elements.carte.prepend(pluie);
+    setTimeout(() => pluie.remove(), 7000);
+  }
+
+  elements.carte.addEventListener('close', () => {
+    if (!finaleEnAttente) {
+      return;
+    }
+    finaleEnAttente = false;
+    const toutEstOuvert = casesOuvertes.size === calendrier.jours.length;
+    const message = toutEstOuvert
+      ? 'Joyeux Noël ! Les 24 cases sont ouvertes.'
+      : 'Joyeux Noël ! Il reste des cases à rattraper...';
+    afficherBulle(message, 6000);
+  });
 
   function numeroDeLaProchaineCaseFermee() {
     const numerosFermes = calendrier.jours.filter((jour) => !jour.ouvrable).map((jour) => jour.numero);
@@ -296,16 +361,17 @@
   }
 
   let minuterieBulle = null;
-  function afficherBulle(texte) {
+  function afficherBulle(texte, dureeEnMs = 2400) {
     elements.bulle.textContent = texte;
     elements.bulle.classList.add('est-visible');
     clearTimeout(minuterieBulle);
-    minuterieBulle = setTimeout(() => elements.bulle.classList.remove('est-visible'), 2400);
+    minuterieBulle = setTimeout(() => elements.bulle.classList.remove('est-visible'), dureeEnMs);
   }
 
   function afficherCarte(jour) {
     elements.bulle.classList.remove('est-visible');
     elements.carteDate.textContent = libelleDuJour(jour.numero);
+    elements.carteNoel.hidden = jour.numero !== DERNIER_JOUR;
 
     if (jour.image) {
       elements.carteImage.src = jour.image;
