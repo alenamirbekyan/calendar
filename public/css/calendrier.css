@@ -456,11 +456,12 @@ body {
 
 /* ---------- Carte qui révèle le contenu ---------- */
 
+/* Centrée à l'écran, sur mobile comme sur ordinateur */
 .carte {
-  width: 100%;
+  width: calc(100% - 32px);
   max-width: 480px;
   max-height: 100dvh;
-  margin: auto auto 0;
+  margin: auto;
   padding: 0;
   border: 0;
   background: transparent;
@@ -485,12 +486,12 @@ body {
 
 .carte-papier {
   position: relative;
-  max-height: 90dvh;
+  max-height: 85dvh;
   overflow-y: auto;
-  padding: 26px 22px calc(30px + env(safe-area-inset-bottom));
-  border-radius: 20px 20px 0 0;
+  padding: 26px 22px 30px;
+  border-radius: 14px;
   background-color: var(--papier);
-  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
   text-align: center;
   outline: none;
 }
@@ -509,13 +510,7 @@ body {
 }
 
 @media (min-width: 640px) {
-  .carte {
-    margin: auto;
-  }
-
   .carte-papier {
-    border-radius: 14px;
-    padding-bottom: 30px;
     transform: rotate(-0.6deg);
   }
 }
