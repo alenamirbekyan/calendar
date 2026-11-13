@@ -280,4 +280,5 @@ module.exports = {
   trouverParJeton,
   trouverAccesParJeton,
   enregistrerOuverture,
+  jetonValide,
 };

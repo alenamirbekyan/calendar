@@ -24,6 +24,10 @@
     carteImage: document.getElementById('carte-image'),
     carteTexte: document.getElementById('carte-texte'),
     bulle: document.getElementById('bulle'),
+    installer: document.getElementById('installer'),
+    installerTexte: document.getElementById('installer-texte'),
+    installerBouton: document.getElementById('installer-bouton'),
+    installerFermer: document.getElementById('installer-fermer'),
   };
 
   const mouvementReduit = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -168,10 +172,15 @@
     if (jour.ouvrable) {
       if (jour.image) {
         const vignette = document.createElement('img');
+        vignette.className = 'case-polaroid';
         vignette.src = jour.image;
         vignette.alt = '';
         vignette.loading = 'lazy';
         creux.appendChild(vignette);
+        creux.insertAdjacentHTML(
+          'beforeend',
+          '<svg class="case-punaise" aria-hidden="true"><use href="#motif-etoile"/></svg>'
+        );
       } else if (jour.texte && jour.texte.trim()) {
         // Pas d'image : un extrait du mot, visible dans l'entrebâillement de la porte
         const extrait = document.createElement('span');
@@ -553,6 +562,94 @@
     requestAnimationFrame(animer);
   }
 
+  // ---------- Application installable (PWA) ----------
+
+  const CLE_INSTALLATION_REFUSEE = 'avent:installation-refusee';
+  let invitationAndroid = null; // événement fourni par Chrome, à rejouer au clic
+
+  // Ouverte depuis l'icône de l'écran d'accueil (ou une fenêtre d'application sur ordinateur)
+  function estDejaInstallee() {
+    const modesApplication = ['standalone', 'fullscreen', 'minimal-ui', 'window-controls-overlay'];
+    const ouverteCommeApplication = modesApplication.some((mode) => {
+      return window.matchMedia(`(display-mode: ${mode})`).matches;
+    });
+    return ouverteCommeApplication || window.navigator.standalone === true;
+  }
+
+  function installationRefusee() {
+    try {
+      return localStorage.getItem(CLE_INSTALLATION_REFUSEE) === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  function estUnAppareilApple() {
+    const agent = window.navigator.userAgent;
+    const iPadRecent = agent.includes('Macintosh') && navigator.maxTouchPoints > 1;
+    return /iPhone|iPad|iPod/.test(agent) || iPadRecent;
+  }
+
+  function preparerInstallation() {
+    if (typeDePage !== 'c' || estDejaInstallee()) {
+      return;
+    }
+
+    // Le service worker n'est accepté qu'en HTTPS (ou sur localhost)
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js', { scope: '/c/' }).catch(() => {});
+    }
+
+    if (installationRefusee()) {
+      return;
+    }
+
+    // Android / Chrome : le navigateur propose l'installation, on la déclenche depuis notre bouton
+    window.addEventListener('beforeinstallprompt', (evenement) => {
+      evenement.preventDefault();
+      invitationAndroid = evenement;
+      afficherInvitation("Gardez le calendrier sur votre écran d'accueil.", true);
+    });
+
+    // iPhone / iPad : pas d'invitation automatique, on explique le geste
+    if (estUnAppareilApple()) {
+      setTimeout(() => {
+        afficherInvitation("Pour l'avoir comme une appli : bouton Partager, puis « Sur l'écran d'accueil ».", false);
+      }, 3000);
+    }
+  }
+
+  function afficherInvitation(texte, avecBouton) {
+    elements.installerTexte.textContent = texte;
+    elements.installerBouton.hidden = !avecBouton;
+    elements.installer.hidden = false;
+  }
+
+  function masquerInvitation() {
+    elements.installer.hidden = true;
+  }
+
+  elements.installerBouton.addEventListener('click', async () => {
+    if (!invitationAndroid) {
+      return;
+    }
+    invitationAndroid.prompt();
+    await invitationAndroid.userChoice;
+    invitationAndroid = null;
+    masquerInvitation();
+  });
+
+  elements.installerFermer.addEventListener('click', () => {
+    masquerInvitation();
+    try {
+      localStorage.setItem(CLE_INSTALLATION_REFUSEE, '1');
+    } catch {
+      // stockage indisponible : l'invitation reviendra, rien de grave
+    }
+  });
+
+  window.addEventListener('appinstalled', masquerInvitation);
+
   // ---------- Chargement des données ----------
 
   // numeroALaisserFerme : case qu'on s'apprête à ouvrir, pour garder l'animation de la porte
@@ -592,6 +689,7 @@
       return;
     }
     setTimeout(faireDefilerVersLaCaseDuJour, 900);
+    preparerInstallation();
   }
 
   demarrer();

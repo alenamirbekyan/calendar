@@ -70,16 +70,59 @@ app.use('/uploads', express.static(images.DOSSIER_IMAGES, { maxAge: '7d' }));
 // complète (https://site/...) pour l'image d'aperçu du lien.
 const MODELE_PAGE_CALENDRIER = fs.readFileSync(path.join(DOSSIER_PUBLIC, 'calendrier.html'), 'utf8');
 
-function envoyerPageCalendrier(req, res) {
+// balisesEnPlus : HTML ajouté dans <head> à la place de {{BALISES_PAGE}}
+function envoyerPageCalendrier(req, res, balisesEnPlus) {
   const origine = `${req.protocol}://${req.get('host')}`;
-  res.type('html').send(MODELE_PAGE_CALENDRIER.replaceAll('{{ORIGINE}}', origine));
+  const page = MODELE_PAGE_CALENDRIER.replaceAll('{{ORIGINE}}', origine).replace('{{BALISES_PAGE}}', balisesEnPlus);
+  // Jamais de copie en cache : hors connexion, le navigateur ressortirait une page sans style
+  // au lieu de la page d'excuse du service worker
+  res.set('Cache-Control', 'no-store');
+  res.type('html').send(page);
 }
 
-// Page d'un destinataire : le jeton de l'URL est la seule clé d'entrée
-app.get('/c/:jeton', envoyerPageCalendrier);
+// Page d'un destinataire : le jeton de l'URL est la seule clé d'entrée.
+// Chaque lien a son propre manifeste, pour que l'application installée rouvre SON calendrier.
+app.get('/c/:jeton', (req, res) => {
+  let balises = '';
+  if (stockage.jetonValide(req.params.jeton)) {
+    balises = `<link rel="manifest" href="/c/${req.params.jeton}/manifest.webmanifest">`;
+  }
+  envoyerPageCalendrier(req, res, balises);
+});
 
-// Aperçu admin : même page, les données ne sont servies qu'au propriétaire connecté
-app.get('/apercu/:id', envoyerPageCalendrier);
+// Aperçu admin : même page, sans manifeste (rien à installer), données réservées au propriétaire
+app.get('/apercu/:id', (req, res) => {
+  envoyerPageCalendrier(req, res, '');
+});
+
+// Manifeste de l'application installable (PWA), propre à chaque lien
+app.get('/c/:jeton/manifest.webmanifest', async (req, res) => {
+  // Version sans « dernière visite » : le téléphone relit le manifeste tout seul
+  const acces = await stockage.trouverAccesParJeton(req.params.jeton);
+  if (!acces) {
+    return res.status(404).json({ erreur: 'Calendrier introuvable' });
+  }
+  const adresseDuLien = `/c/${req.params.jeton}`;
+  const titre = acces.calendrier.titre;
+  res.type('application/manifest+json').json({
+    id: adresseDuLien,
+    name: titre,
+    short_name: titre.length <= 12 ? titre : 'Avent',
+    description: "Calendrier de l'Avent : une surprise par jour jusqu'à Noël.",
+    lang: 'fr',
+    start_url: adresseDuLien,
+    scope: adresseDuLien,
+    display: 'standalone',
+    orientation: 'portrait',
+    background_color: '#0c2024',
+    theme_color: '#0c2024',
+    icons: [
+      { src: '/img/icone-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: '/img/icone-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: '/img/icone-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+    ],
+  });
+});
 
 // ---------- Données d'un calendrier pour la page publique ----------
 

@@ -59,6 +59,16 @@ npm start
 - Sans lien valide, la page affiche « calendrier introuvable ».
 - Les pages envoient `Referrer-Policy: no-referrer` et `noindex` : les jetons ne fuient pas vers d'autres sites ni dans les moteurs de recherche.
 
+## Application installable (PWA)
+
+Chaque lien peut s'installer sur l'écran d'accueil du téléphone, comme une application : icône, plein écran, sans barre d'adresse.
+
+- **iPhone / iPad** : dans Safari, bouton Partager, puis « Sur l'écran d'accueil ». La page l'explique dans un bandeau.
+- **Android** : un bandeau propose « Installer » (ou menu de Chrome, « Installer l'application »).
+- Chaque lien a son propre manifeste (`/c/<jeton>/manifest.webmanifest`) : l'icône rouvre le calendrier de ce destinataire.
+- Le service worker (`public/sw.js`) ne met rien en cache. Il sert seulement à rendre l'application installable et à afficher une page d'excuse sans connexion.
+- **Condition** : le site doit être servi en HTTPS (voir plus haut). En HTTP, seule la page normale fonctionne.
+
 ## Configuration (`.env`)
 
 | Variable            | Rôle                                                                        |
