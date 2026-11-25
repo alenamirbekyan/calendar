@@ -439,6 +439,14 @@
       numero.textContent = jour.numero;
       tuile.appendChild(numero);
 
+      if (jour.musique) {
+        const note = document.createElement('span');
+        note.className = 'tuile-musique';
+        note.textContent = '♪';
+        note.title = 'Musique';
+        tuile.appendChild(note);
+      }
+
       if (jour.image) {
         const image = document.createElement('img');
         image.src = `/uploads/${jour.image}`;
@@ -499,12 +507,77 @@
     }
   }
 
+  // Musique de la case : même principe que l'image
+  let musiqueChoisie = null; // File prêt à envoyer
+  let retirerMusique = false;
+  let adresseMusiqueTemporaire = null;
+
+  const lecteurMusique = document.getElementById('jour-apercu-musique');
+  const musiqueVide = document.getElementById('jour-musique-vide');
+  const champMusique = document.getElementById('jour-fichier-musique');
+  const boutonRetirerMusique = document.getElementById('jour-retirer-musique');
+  const TAILLE_MAX_MUSIQUE = 15 * 1024 * 1024;
+
+  function montrerMusique(adresse) {
+    if (adresse) {
+      lecteurMusique.src = adresse;
+      lecteurMusique.hidden = false;
+      musiqueVide.hidden = true;
+      boutonRetirerMusique.hidden = false;
+    } else {
+      lecteurMusique.pause();
+      lecteurMusique.removeAttribute('src');
+      lecteurMusique.hidden = true;
+      musiqueVide.hidden = false;
+      boutonRetirerMusique.hidden = true;
+    }
+  }
+
+  function libererMusiqueTemporaire() {
+    if (adresseMusiqueTemporaire) {
+      URL.revokeObjectURL(adresseMusiqueTemporaire);
+      adresseMusiqueTemporaire = null;
+    }
+  }
+
+  champMusique.addEventListener('change', () => {
+    const fichier = champMusique.files[0];
+    if (!fichier) {
+      return;
+    }
+    afficherErreur(formulaireJour, '');
+    if (fichier.size > TAILLE_MAX_MUSIQUE) {
+      champMusique.value = '';
+      afficherErreur(formulaireJour, 'Musique trop lourde (15 Mo maximum).');
+      return;
+    }
+    musiqueChoisie = fichier;
+    retirerMusique = false;
+    libererMusiqueTemporaire();
+    adresseMusiqueTemporaire = URL.createObjectURL(fichier);
+    montrerMusique(adresseMusiqueTemporaire);
+  });
+
+  boutonRetirerMusique.addEventListener('click', () => {
+    musiqueChoisie = null;
+    retirerMusique = true;
+    champMusique.value = '';
+    libererMusiqueTemporaire();
+    montrerMusique(null);
+  });
+
   function ouvrirDialogueJour(jour) {
     jourEnCours = jour;
     imageChoisie = null;
     retirerImage = false;
     libererApercuTemporaire();
     champFichier.value = '';
+
+    musiqueChoisie = null;
+    retirerMusique = false;
+    libererMusiqueTemporaire();
+    champMusique.value = '';
+    montrerMusique(jour.musique ? `/uploads/${jour.musique}` : null);
 
     document.getElementById('jour-titre').textContent = `Case du ${jour.numero === 1 ? '1er' : jour.numero} décembre`;
     formulaireJour.elements.texte.value = jour.texte || '';
@@ -550,6 +623,11 @@
     } else if (retirerImage) {
       donnees.append('supprimerImage', '1');
     }
+    if (musiqueChoisie) {
+      donnees.append('musique', musiqueChoisie, musiqueChoisie.name);
+    } else if (retirerMusique) {
+      donnees.append('supprimerMusique', '1');
+    }
 
     await pendantEnvoi(formulaireJour, async () => {
       try {
@@ -565,7 +643,11 @@
     });
   });
 
-  dialogueJour.addEventListener('close', libererApercuTemporaire);
+  dialogueJour.addEventListener('close', () => {
+    libererApercuTemporaire();
+    lecteurMusique.pause();
+    libererMusiqueTemporaire();
+  });
 
   // Les photos de téléphone sont énormes : on les réduit avant l'envoi
   async function reduireImage(fichier) {

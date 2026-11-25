@@ -23,6 +23,9 @@
     carteFigure: document.getElementById('carte-figure'),
     carteImage: document.getElementById('carte-image'),
     carteTexte: document.getElementById('carte-texte'),
+    carteMusique: document.getElementById('carte-musique'),
+    carteMusiqueLibelle: document.getElementById('carte-musique-libelle'),
+    carteAudio: document.getElementById('carte-audio'),
     bulle: document.getElementById('bulle'),
     installer: document.getElementById('installer'),
     installerTexte: document.getElementById('installer-texte'),
@@ -312,6 +315,7 @@
   }
 
   elements.carte.addEventListener('close', () => {
+    arreterMusique();
     if (!finaleEnAttente) {
       return;
     }
@@ -401,7 +405,51 @@
     }
 
     elements.carte.showModal();
+    preparerMusique(jour);
   }
+
+  // ---------- Musique de la carte ----------
+
+  function afficherEtatMusique() {
+    const enLecture = !elements.carteAudio.paused;
+    elements.carteMusique.classList.toggle('est-en-lecture', enLecture);
+    elements.carteMusiqueLibelle.textContent = enLecture ? 'Couper la musique' : 'Lancer la musique';
+    elements.carteMusique.setAttribute('aria-label', elements.carteMusiqueLibelle.textContent);
+  }
+
+  function arreterMusique() {
+    elements.carteAudio.pause();
+    elements.carteAudio.removeAttribute('src');
+    elements.carteAudio.load();
+    elements.carteMusique.hidden = true;
+  }
+
+  // La carte s'ouvre juste après un clic : le navigateur autorise alors la lecture.
+  // S'il la refuse quand même (Safari, économiseur de batterie), le bouton permet de la lancer.
+  function preparerMusique(jour) {
+    arreterMusique();
+    if (!jour.musique) {
+      return;
+    }
+    elements.carteAudio.src = jour.musique;
+    elements.carteMusique.hidden = false;
+    afficherEtatMusique();
+    elements.carteAudio.play().catch(() => {
+      afficherEtatMusique();
+    });
+  }
+
+  elements.carteMusique.addEventListener('click', () => {
+    if (elements.carteAudio.paused) {
+      elements.carteAudio.play().catch(() => {});
+    } else {
+      elements.carteAudio.pause();
+    }
+  });
+
+  elements.carteAudio.addEventListener('play', afficherEtatMusique);
+  elements.carteAudio.addEventListener('pause', afficherEtatMusique);
+  elements.carteAudio.addEventListener('ended', afficherEtatMusique);
 
   function fermerCarte() {
     elements.carte.close();

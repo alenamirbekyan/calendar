@@ -29,6 +29,9 @@ CREATE TABLE IF NOT EXISTS jours (
   PRIMARY KEY (calendrier_id, numero)
 );
 
+-- Musique jouée à l'ouverture de la carte (nom du fichier dans data/uploads)
+ALTER TABLE jours ADD COLUMN IF NOT EXISTS musique text;
+
 -- Liens d'accès : un par destinataire, chacun avec son jeton secret.
 CREATE TABLE IF NOT EXISTS liens (
   id               uuid PRIMARY KEY,

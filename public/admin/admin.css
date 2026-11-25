@@ -472,6 +472,19 @@ textarea:focus {
   font-weight: 600;
 }
 
+.tuile-musique {
+  position: absolute;
+  left: 5px;
+  bottom: 5px;
+  z-index: 1;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--canneberge);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
 /* ---------- Dialogues (plein écran sur mobile) ---------- */
 
 .dialogue {
@@ -539,6 +552,11 @@ textarea:focus {
   margin: 0;
   color: var(--encre-douce);
   font-size: 0.9rem;
+}
+
+.jour-lecteur {
+  display: block;
+  width: 100%;
 }
 
 .jour-boutons-image {

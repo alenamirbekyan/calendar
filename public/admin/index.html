@@ -227,6 +227,19 @@
           <button type="button" id="jour-retirer-image" class="bouton">Retirer l'image</button>
         </div>
       </div>
+      <div class="champ">
+        <span>Musique (jouée à l'ouverture de la carte)</span>
+        <audio id="jour-apercu-musique" class="jour-lecteur" controls preload="none" hidden></audio>
+        <p id="jour-musique-vide" class="aide">Pas de musique</p>
+        <div class="jour-boutons-image">
+          <label class="bouton">
+            Choisir une musique
+            <input type="file" id="jour-fichier-musique" accept="audio/mpeg,audio/mp4,audio/x-m4a,audio/ogg,audio/wav,.mp3,.m4a,.ogg,.wav" hidden>
+          </label>
+          <button type="button" id="jour-retirer-musique" class="bouton">Retirer la musique</button>
+        </div>
+        <p class="aide">MP3, M4A, OGG ou WAV, 15 Mo maximum.</p>
+      </div>
       <p class="erreur" data-erreur></p>
       <div class="dialogue-actions">
         <button type="button" class="bouton" data-fermer>Annuler</button>

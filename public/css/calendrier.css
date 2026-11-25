@@ -650,6 +650,35 @@ body {
   color: #6b5446;
 }
 
+.carte-musique {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 18px auto 0;
+  padding: 8px 16px;
+  border: 1px solid rgba(45, 33, 26, 0.25);
+  border-radius: 999px;
+  background: rgba(45, 33, 26, 0.06);
+  color: var(--encre);
+  font: inherit;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.carte-musique[hidden] {
+  display: none;
+}
+
+/* Icône pause pendant la lecture, icône lecture sinon */
+.carte-musique .carte-musique-pause,
+.carte-musique.est-en-lecture .carte-musique-lecture {
+  display: none;
+}
+
+.carte-musique.est-en-lecture .carte-musique-pause {
+  display: block;
+}
+
 .carte-signature {
   display: block;
   width: 34px;

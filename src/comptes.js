@@ -66,29 +66,45 @@ async function changerMotDePasse(id, nouveauMotDePasse) {
   return resultat.rowCount > 0;
 }
 
-// Supprime un admin, ses calendriers (par cascade) et les images de ses calendriers.
+// Déconnecte toutes les sessions ouvertes d'un admin (après un changement de mot de passe),
+// sauf éventuellement celle en cours. Les sessions sont dans la table « sessions »
+// (connect-pg-simple), l'id de l'admin est dans la colonne JSON « sess ».
+async function fermerSessions(adminId, sessionAGarder) {
+  if (sessionAGarder) {
+    await pool.query("DELETE FROM sessions WHERE sess->>'adminId' = $1 AND sid <> $2", [adminId, sessionAGarder]);
+  } else {
+    await pool.query("DELETE FROM sessions WHERE sess->>'adminId' = $1", [adminId]);
+  }
+}
+
+// Supprime un admin, ses calendriers (par cascade) et les fichiers (images, musiques) de ses calendriers.
 async function supprimerAdmin(id) {
   if (!estUnUuid(id)) {
     return false;
   }
-  const imagesASupprimer = await enTransaction(async (client) => {
-    const images = await client.query(
-      `SELECT j.image FROM jours j
+  const fichiersASupprimer = await enTransaction(async (client) => {
+    const fichiers = await client.query(
+      `SELECT j.image, j.musique FROM jours j
        JOIN calendriers c ON c.id = j.calendrier_id
-       WHERE c.admin_id = $1 AND j.image IS NOT NULL`,
+       WHERE c.admin_id = $1 AND (j.image IS NOT NULL OR j.musique IS NOT NULL)`,
       [id]
     );
     const suppression = await client.query('DELETE FROM admins WHERE id = $1', [id]);
     if (suppression.rowCount === 0) {
       return null;
     }
-    return images.rows.map((ligne) => ligne.image);
+    const noms = [];
+    for (const ligne of fichiers.rows) {
+      noms.push(ligne.image, ligne.musique);
+    }
+    return noms;
   });
 
-  if (imagesASupprimer === null) {
+  if (fichiersASupprimer === null) {
     return false;
   }
-  imagesASupprimer.forEach(supprimerFichierImage);
+  // supprimerFichierImage ignore les valeurs nulles
+  fichiersASupprimer.forEach(supprimerFichierImage);
   return true;
 }
 
@@ -108,6 +124,7 @@ module.exports = {
   identifiantEstPris,
   creerAdmin,
   changerMotDePasse,
+  fermerSessions,
   supprimerAdmin,
   creerPremierAdminSiBesoin,
 };

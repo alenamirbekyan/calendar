@@ -2,7 +2,7 @@
 
 Petite application Node.js + PostgreSQL pour créer des calendriers de l'Avent personnalisés.
 
-- **Backoffice** (`/admin/`) : chaque admin a son compte et ne voit que **ses** calendriers. Il remplit les 24 cases (texte, image, ou les deux) et génère un **lien secret par destinataire**.
+- **Backoffice** (`/admin/`) : chaque admin a son compte et ne voit que **ses** calendriers. Il remplit les 24 cases (texte, image, musique, ou un mélange) et génère un **lien secret par destinataire**.
 - **Page publique** (`/c/<jeton>`) : pensée pour le mobile. On n'y accède qu'avec un lien généré par l'admin. Une case s'ouvre à partir du jour correspondant, d'après la **date système du serveur**. Le contenu des cases futures n'est jamais envoyé au navigateur.
 
 ## Avec Docker (recommandé)
@@ -77,8 +77,8 @@ Chaque lien peut s'installer sur l'écran d'accueil du téléphone, comme une ap
 | `POSTGRES_PASSWORD` | Mot de passe de la base (lettres et chiffres, il est repris dans une URL)  |
 | `DATABASE_URL`      | Adresse de la base pour `npm start` (remplacée automatiquement dans Docker) |
 | `ADMIN_LOGIN`       | Identifiant du premier super admin (`admin` par défaut)                     |
-| `ADMIN_PASSWORD`    | Mot de passe du premier super admin                                         |
-| `SESSION_SECRET`    | Secret des cookies de session                                               |
+| `ADMIN_PASSWORD`    | Mot de passe du premier super admin (10 caractères minimum)                 |
+| `SESSION_SECRET`    | Secret des cookies de session (32 caractères minimum, sinon refus de démarrer) |
 | `DATE_SIMULEE`      | Pour tester : force la date du jour (`AAAA-MM-JJ`). Vide en prod.          |
 | `TRUST_PROXY`       | `1` si le site est servi en HTTPS derrière un proxy ou un tunnel            |
 | `DOMAINE`           | Nom de domaine public servi en HTTPS par Caddy (profil `https`)             |
@@ -97,6 +97,6 @@ Chaque lien peut s'installer sur l'écran d'accueil du téléphone, comme une ap
 ## Données
 
 - PostgreSQL : tables `admins`, `calendriers`, `jours`, `liens`, `ouvertures`, `sessions` (schéma dans `src/schema.sql`, appliqué au démarrage).
-- `data/uploads/` : les images (noms aléatoires, réduites à 1600 px côté navigateur avant envoi).
+- `data/uploads/` : les images et musiques (noms aléatoires, réduites à 1600 px côté navigateur avant envoi).
 
 Sauvegarde : `docker compose exec db pg_dump -U calendrier calendrier > sauvegarde.sql`, plus le volume `donnees`.

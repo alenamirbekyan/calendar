@@ -67,6 +67,12 @@
         <img id="carte-image" alt="">
       </figure>
       <p id="carte-texte" class="carte-texte"></p>
+      <button type="button" id="carte-musique" class="carte-musique" aria-label="Couper la musique" hidden>
+        <svg class="carte-musique-lecture" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M8 5 L19 12 L8 19 Z" fill="currentColor"/></svg>
+        <svg class="carte-musique-pause" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M7 5 H11 V19 H7 Z M13 5 H17 V19 H13 Z" fill="currentColor"/></svg>
+        <span id="carte-musique-libelle">Musique</span>
+      </button>
+      <audio id="carte-audio" preload="none"></audio>
       <svg class="carte-signature" viewBox="0 0 24 24" aria-hidden="true"><use href="#motif-houx"/></svg>
     </div>
   </dialog>

@@ -18,21 +18,42 @@ const stockage = require('./src/stockage');
 const dates = require('./src/dates');
 const images = require('./src/images');
 const limiteConnexion = require('./src/limiteConnexion');
+const { contenuCorrespondAExtension } = require('./src/signatures');
 const { verifierMotDePasse, hacherMotDePasse } = require('./src/motsDePasse');
 const PGStore = require('connect-pg-simple')(session);
 
 const PORT = Number(process.env.PORT) || 3000;
 const DOSSIER_PUBLIC = path.join(__dirname, 'public');
 
+// Valeurs du .env.example : un site qui démarre avec elles est ouvert à tous
+const SECRET_DE_SESSION_EXEMPLE = 'remplace-par-une-longue-chaine-aleatoire';
+const LONGUEUR_MIN_SECRET_DE_SESSION = 32;
+
 let secretDeSession = process.env.SESSION_SECRET;
 if (!secretDeSession) {
   secretDeSession = crypto.randomBytes(32).toString('hex');
   console.warn('SESSION_SECRET absent : secret temporaire généré (les sessions sautent au redémarrage).');
+} else if (secretDeSession === SECRET_DE_SESSION_EXEMPLE || secretDeSession.length < LONGUEUR_MIN_SECRET_DE_SESSION) {
+  console.error(
+    `SESSION_SECRET trop faible : mettez une chaîne aléatoire d'au moins ${LONGUEUR_MIN_SECRET_DE_SESSION} caractères ` +
+      '(par exemple le résultat de : node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))").'
+  );
+  process.exit(1);
 }
 
 // À activer quand le site est servi en HTTPS derrière un proxy ou un tunnel :
 // le cookie de session n'est alors envoyé qu'en HTTPS.
 const derriereProxyHttps = process.env.TRUST_PROXY === '1';
+
+if (process.env.DOMAINE && !derriereProxyHttps) {
+  console.warn(
+    'DOMAINE est défini mais pas TRUST_PROXY=1 : derrière Caddy, le cookie de session ' +
+      "partirait sans l'option « secure ». Ajoutez TRUST_PROXY=1 dans .env."
+  );
+}
+if ((process.env.DATABASE_URL || '').includes('change-moi-aussi')) {
+  console.warn("POSTGRES_PASSWORD a encore la valeur d'exemple : changez-la.");
+}
 
 const app = express();
 app.disable('x-powered-by');
@@ -41,11 +62,49 @@ if (derriereProxyHttps) {
 }
 app.use(express.json());
 
+// Politique de sécurité du contenu : seuls nos propres scripts s'exécutent,
+// le site ne peut pas être affiché dans un cadre d'un autre site (clickjacking).
+// 'unsafe-inline' pour les styles : la guirlande et une icône SVG utilisent l'attribut style.
+// blob: sert à l'aperçu de l'image et de la musique dans le backoffice, avant l'envoi.
+const POLITIQUE_DE_CONTENU = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com",
+  "img-src 'self' data: blob:",
+  "media-src 'self' blob:",
+  "connect-src 'self'",
+  "worker-src 'self'",
+  "manifest-src 'self'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join('; ');
+
+const DOMAINE_PUBLIC = String(process.env.DOMAINE || '').trim().toLowerCase();
+
+function estLeDomainePublic(nomDHote) {
+  if (!DOMAINE_PUBLIC || DOMAINE_PUBLIC === 'localhost') {
+    return false;
+  }
+  return String(nomDHote || '').toLowerCase() === DOMAINE_PUBLIC;
+}
+
 // Les adresses contiennent des jetons secrets : on ne les transmet à aucun autre site
 // et on demande aux moteurs de recherche de ne rien indexer.
 app.use((req, res, next) => {
   res.set('Referrer-Policy', 'no-referrer');
   res.set('X-Robots-Tag', 'noindex, nofollow');
+  // Le navigateur respecte le type annoncé et ne « devine » jamais du HTML dans un fichier
+  res.set('X-Content-Type-Options', 'nosniff');
+  res.set('X-Frame-Options', 'DENY');
+  res.set('Content-Security-Policy', POLITIQUE_DE_CONTENU);
+  // En HTTPS sur le vrai domaine : le navigateur refusera ensuite toute connexion en clair pendant un an.
+  // Jamais sur localhost : la règle vaut pour tous les ports, elle casserait http://localhost:3000.
+  if (req.secure && estLeDomainePublic(req.hostname)) {
+    res.set('Strict-Transport-Security', 'max-age=31536000');
+  }
   next();
 });
 
@@ -64,15 +123,29 @@ app.use(
 
 app.use(express.static(DOSSIER_PUBLIC));
 // Les noms de fichiers sont des UUID : impossible de deviner l'image d'une case encore fermée.
-app.use('/uploads', express.static(images.DOSSIER_IMAGES, { maxAge: '7d' }));
+// « sandbox » : même ouvert directement dans un onglet, un fichier envoyé ne peut exécuter aucun script.
+app.use(
+  '/uploads',
+  express.static(images.DOSSIER_IMAGES, {
+    maxAge: '7d',
+    setHeaders: (res) => {
+      res.set('Content-Security-Policy', "default-src 'none'; media-src 'self'; img-src 'self'; sandbox");
+    },
+  })
+);
 
 // La page du calendrier contient {{ORIGINE}} : les messageries exigent une adresse
 // complète (https://site/...) pour l'image d'aperçu du lien.
 const MODELE_PAGE_CALENDRIER = fs.readFileSync(path.join(DOSSIER_PUBLIC, 'calendrier.html'), 'utf8');
 
+// L'en-tête Host est fourni par le client : on n'accepte qu'un nom de domaine ou une IP,
+// pour ne jamais recopier dans la page des guillemets ou des balises.
+const FORMAT_HOTE = /^[A-Za-z0-9.\-[\]:]+$/;
+
 // balisesEnPlus : HTML ajouté dans <head> à la place de {{BALISES_PAGE}}
 function envoyerPageCalendrier(req, res, balisesEnPlus) {
-  const origine = `${req.protocol}://${req.get('host')}`;
+  const hote = req.get('host') || '';
+  const origine = FORMAT_HOTE.test(hote) ? `${req.protocol}://${hote}` : '';
   const page = MODELE_PAGE_CALENDRIER.replaceAll('{{ORIGINE}}', origine).replace('{{BALISES_PAGE}}', balisesEnPlus);
   // Jamais de copie en cache : hors connexion, le navigateur ressortirait une page sans style
   // au lieu de la page d'excuse du service worker
@@ -143,6 +216,7 @@ function donneesPubliques(calendrier, { apercu }) {
       ouvrable: true,
       texte: jour.texte,
       image: jour.image ? `/uploads/${jour.image}` : null,
+      musique: jour.musique ? `/uploads/${jour.musique}` : null,
     };
   });
 
@@ -304,6 +378,8 @@ app.put('/admin/api/mon-compte/mot-de-passe', exigerAdmin, async (req, res) => {
     return res.status(400).json({ erreur });
   }
   await comptes.changerMotDePasse(req.admin.id, nouveau);
+  // Les autres appareils (peut-être un intrus) sont déconnectés, celui-ci reste connecté
+  await comptes.fermerSessions(req.admin.id, req.sessionID);
   res.json({ ok: true });
 });
 
@@ -346,6 +422,8 @@ app.put('/admin/api/comptes/:id/mot-de-passe', exigerAdmin, exigerSuperAdmin, as
     return res.status(404).json({ erreur: 'Compte introuvable' });
   }
   await comptes.changerMotDePasse(compte.id, motDePasse);
+  // Le compte devra se reconnecter partout avec le nouveau mot de passe
+  await comptes.fermerSessions(compte.id, null);
   res.json({ ok: true });
 });
 
@@ -458,39 +536,94 @@ const EXTENSIONS_PAR_TYPE = {
   'image/gif': '.gif',
 };
 
+const EXTENSIONS_MUSIQUE_PAR_TYPE = {
+  'audio/mpeg': '.mp3',
+  'audio/mp4': '.m4a',
+  'audio/x-m4a': '.m4a',
+  'audio/ogg': '.ogg',
+  'audio/wav': '.wav',
+  'audio/x-wav': '.wav',
+};
+
+// Chaque champ du formulaire a ses propres types de fichiers acceptés
+function extensionDuFichier(fichier) {
+  if (fichier.fieldname === 'musique') {
+    return EXTENSIONS_MUSIQUE_PAR_TYPE[fichier.mimetype];
+  }
+  return EXTENSIONS_PAR_TYPE[fichier.mimetype];
+}
+
 const upload = multer({
   storage: multer.diskStorage({
     destination: images.DOSSIER_IMAGES,
     filename: (req, fichier, rappel) => {
-      rappel(null, crypto.randomUUID() + EXTENSIONS_PAR_TYPE[fichier.mimetype]);
+      rappel(null, crypto.randomUUID() + extensionDuFichier(fichier));
     },
   }),
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: 15 * 1024 * 1024 },
   fileFilter: (req, fichier, rappel) => {
-    const typeAccepte = EXTENSIONS_PAR_TYPE[fichier.mimetype] !== undefined;
-    rappel(null, typeAccepte);
+    const champConnu = fichier.fieldname === 'image' || fichier.fieldname === 'musique';
+    rappel(null, champConnu && extensionDuFichier(fichier) !== undefined);
   },
 });
 
+const champsFichiers = upload.fields([
+  { name: 'image', maxCount: 1 },
+  { name: 'musique', maxCount: 1 },
+]);
+
 // exigerAdmin passe avant multer : un visiteur non connecté ne peut rien déposer sur le disque
-app.put('/admin/api/calendriers/:id/jours/:numero', exigerAdmin, upload.single('image'), async (req, res) => {
+app.put('/admin/api/calendriers/:id/jours/:numero', exigerAdmin, champsFichiers, async (req, res) => {
   const numero = Number(req.params.numero);
   const numeroValide = Number.isInteger(numero) && numero >= 1 && numero <= dates.NOMBRE_DE_JOURS;
+
+  const fichiers = req.files || {};
+  const fichierImage = fichiers.image ? fichiers.image[0] : null;
+  const fichierMusique = fichiers.musique ? fichiers.musique[0] : null;
+  const fichiersRecus = [fichierImage, fichierMusique].filter((fichier) => fichier !== null);
+
+  function supprimerFichiersRecus() {
+    for (const fichier of fichiersRecus) {
+      images.supprimerFichierImage(fichier.filename);
+    }
+  }
+
+  // Le contenu doit correspondre au type annoncé, sinon on jette tout
+  for (const fichier of fichiersRecus) {
+    const contenuValide = await contenuCorrespondAExtension(fichier.path, path.extname(fichier.filename));
+    if (!contenuValide) {
+      supprimerFichiersRecus();
+      const genre = fichier.fieldname === 'musique' ? 'une musique' : 'une image';
+      return res.status(400).json({ erreur: `Ce fichier n'est pas ${genre} valide.` });
+    }
+  }
 
   const corps = req.body || {};
   const texte = String(corps.texte || '').slice(0, 2000);
   const modifications = { texte };
-  if (req.file) {
-    modifications.image = req.file.filename;
+  if (fichierImage) {
+    modifications.image = fichierImage.filename;
   } else if (corps.supprimerImage === '1') {
     modifications.image = null;
   }
+  if (fichierMusique) {
+    modifications.musique = fichierMusique.filename;
+  } else if (corps.supprimerMusique === '1') {
+    modifications.musique = null;
+  }
 
-  const jour = numeroValide ? await stockage.modifierJour(req.admin.id, req.params.id, numero, modifications) : null;
-  if (!jour) {
-    if (req.file) {
-      images.supprimerFichierImage(req.file.filename);
+  let jour = null;
+  try {
+    if (numeroValide) {
+      jour = await stockage.modifierJour(req.admin.id, req.params.id, numero, modifications);
     }
+  } catch (erreur) {
+    // Base en panne : on ne laisse pas de fichier orphelin sur le disque
+    supprimerFichiersRecus();
+    throw erreur;
+  }
+  if (!jour) {
+    supprimerFichiersRecus();
     return res.status(404).json({ erreur: 'Case introuvable' });
   }
   res.json(jour);
@@ -500,7 +633,7 @@ app.put('/admin/api/calendriers/:id/jours/:numero', exigerAdmin, upload.single('
 
 app.use((erreur, req, res, next) => {
   if (erreur instanceof multer.MulterError) {
-    const message = erreur.code === 'LIMIT_FILE_SIZE' ? 'Image trop lourde (10 Mo maximum).' : 'Envoi du fichier impossible.';
+    const message = erreur.code === 'LIMIT_FILE_SIZE' ? 'Fichier trop lourd (15 Mo maximum).' : 'Envoi du fichier impossible.';
     return res.status(400).json({ erreur: message });
   }
   console.error(erreur);
@@ -512,17 +645,33 @@ app.use((erreur, req, res, next) => {
 async function demarrer() {
   await bdd.initialiserSchema();
 
-  const identifiantInitial = String(process.env.ADMIN_LOGIN || 'admin').trim().toLowerCase();
-  const motDePasseInitial = process.env.ADMIN_PASSWORD;
-  const premierAdmin = motDePasseInitial
-    ? await comptes.creerPremierAdminSiBesoin(identifiantInitial, motDePasseInitial)
-    : null;
-  if (premierAdmin) {
-    console.log(`Premier compte super admin créé : « ${premierAdmin.identifiant} » (mot de passe = ADMIN_PASSWORD).`);
-  }
-  if ((await comptes.listerAdmins()).length === 0) {
-    console.error('Aucun compte admin : définissez ADMIN_PASSWORD (et ADMIN_LOGIN) dans .env pour créer le premier.');
-    process.exit(1);
+  // Premier démarrage : création du super admin à partir du .env, avec les mêmes règles
+  // que dans le backoffice (le mot de passe d'exemple « change-moi » est refusé).
+  const aucunAdmin = (await comptes.listerAdmins()).length === 0;
+  if (aucunAdmin) {
+    const identifiantInitial = String(process.env.ADMIN_LOGIN || 'admin').trim().toLowerCase();
+    const motDePasseInitial = String(process.env.ADMIN_PASSWORD || '');
+
+    if (!motDePasseInitial) {
+      console.error('Aucun compte admin : définissez ADMIN_PASSWORD (et ADMIN_LOGIN) dans .env pour créer le premier.');
+      process.exit(1);
+    }
+    if (!FORMAT_IDENTIFIANT.test(identifiantInitial)) {
+      console.error("ADMIN_LOGIN : 3 à 40 caractères, minuscules, chiffres, point, tiret.");
+      process.exit(1);
+    }
+    const erreur = motDePasseInitial.startsWith('change-moi')
+      ? "ADMIN_PASSWORD a encore la valeur d'exemple."
+      : erreurMotDePasse(motDePasseInitial);
+    if (erreur) {
+      console.error(`Premier compte non créé : ${erreur}`);
+      process.exit(1);
+    }
+
+    const premierAdmin = await comptes.creerPremierAdminSiBesoin(identifiantInitial, motDePasseInitial);
+    if (premierAdmin) {
+      console.log(`Premier compte super admin créé : « ${premierAdmin.identifiant} » (mot de passe = ADMIN_PASSWORD).`);
+    }
   }
 
   app.listen(PORT, () => {

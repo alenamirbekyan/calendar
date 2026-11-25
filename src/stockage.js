@@ -32,6 +32,7 @@ function versJour(ligne) {
     numero: ligne.numero,
     texte: ligne.texte,
     image: ligne.image,
+    musique: ligne.musique,
   };
 }
 
@@ -48,7 +49,7 @@ function versLien(ligne) {
 
 async function lireJours(calendrierId) {
   const resultat = await pool.query(
-    'SELECT numero, texte, image FROM jours WHERE calendrier_id = $1 ORDER BY numero',
+    'SELECT numero, texte, image, musique FROM jours WHERE calendrier_id = $1 ORDER BY numero',
     [calendrierId]
   );
   return resultat.rows.map(versJour);
@@ -71,7 +72,7 @@ async function listerCalendriers(adminId) {
   const resultat = await pool.query(
     `SELECT c.*,
        (SELECT COUNT(*)::int FROM jours j
-         WHERE j.calendrier_id = c.id AND (j.texte <> '' OR j.image IS NOT NULL)) AS jours_remplis,
+         WHERE j.calendrier_id = c.id AND (j.texte <> '' OR j.image IS NOT NULL OR j.musique IS NOT NULL)) AS jours_remplis,
        (SELECT COUNT(*)::int FROM liens l WHERE l.calendrier_id = c.id) AS nombre_liens
      FROM calendriers c
      WHERE c.admin_id = $1
@@ -152,17 +153,18 @@ async function supprimerCalendrier(adminId, id) {
   await pool.query('DELETE FROM calendriers WHERE id = $1 AND admin_id = $2', [id, adminId]);
   for (const jour of jours) {
     supprimerFichierImage(jour.image);
+    supprimerFichierImage(jour.musique);
   }
   return true;
 }
 
-// image : undefined = inchangée, null = retirée, texte = nouveau fichier
-async function modifierJour(adminId, calendrierId, numero, { texte, image }) {
+// image et musique : undefined = inchangée, null = retirée, texte = nouveau fichier
+async function modifierJour(adminId, calendrierId, numero, { texte, image, musique }) {
   const calendrier = await trouverCalendrierSansDetails(adminId, calendrierId);
   if (!calendrier) {
     return null;
   }
-  const avant = await pool.query('SELECT image FROM jours WHERE calendrier_id = $1 AND numero = $2', [
+  const avant = await pool.query('SELECT image, musique FROM jours WHERE calendrier_id = $1 AND numero = $2', [
     calendrierId,
     numero,
   ]);
@@ -170,19 +172,24 @@ async function modifierJour(adminId, calendrierId, numero, { texte, image }) {
     return null;
   }
   const ancienneImage = avant.rows[0].image;
+  const ancienneMusique = avant.rows[0].musique;
 
-  let resultat;
-  if (image === undefined) {
-    resultat = await pool.query(
-      'UPDATE jours SET texte = $1 WHERE calendrier_id = $2 AND numero = $3 RETURNING numero, texte, image',
-      [texte, calendrierId, numero]
-    );
-  } else {
-    resultat = await pool.query(
-      'UPDATE jours SET texte = $1, image = $2 WHERE calendrier_id = $3 AND numero = $4 RETURNING numero, texte, image',
-      [texte, image, calendrierId, numero]
-    );
+  const nouvelleImage = image === undefined ? ancienneImage : image;
+  const nouvelleMusique = musique === undefined ? ancienneMusique : musique;
+
+  const resultat = await pool.query(
+    `UPDATE jours SET texte = $1, image = $2, musique = $3
+     WHERE calendrier_id = $4 AND numero = $5
+     RETURNING numero, texte, image, musique`,
+    [texte, nouvelleImage, nouvelleMusique, calendrierId, numero]
+  );
+
+  // Les anciens fichiers ne sont supprimés qu'une fois la base à jour
+  if (image !== undefined) {
     supprimerFichierImage(ancienneImage);
+  }
+  if (musique !== undefined) {
+    supprimerFichierImage(ancienneMusique);
   }
   return versJour(resultat.rows[0]);
 }
